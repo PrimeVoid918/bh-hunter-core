@@ -304,39 +304,125 @@ export class BoardingHousesService {
     });
   }
 
-  async update(id: number, updateBoardingHouseDto: UpdateBoardingHouseDto) {
-    try {
-      const updated = await this.prisma.boardingHouse.update({
+  async update(
+    id: number,
+    dto: UpdateBoardingHouseDto,
+    images?: {
+      removeGalleryIds: number[];
+      removeThumbnailId: number | undefined;
+      files: FileMap;
+    },
+  ) {
+    const prisma = this.prisma;
+
+    return prisma.$transaction(async (tx) => {
+      // #1 --- Update primitive BH fields exactly like now
+      const data: Prisma.BoardingHouseUpdateInput = {};
+
+      //! make frontend and backend parser for key=value pair of images when transferring in path
+      //! idea are in `React Native NestJS integration` chat
+
+      const primitiveFields: (keyof UpdateBoardingHouseDto)[] = [
+        'name',
+        'address',
+        'description',
+        'amenities',
+        'availabilityStatus',
+        'occupancyType',
+        'ownerId',
+      ];
+
+      for (const key of primitiveFields) {
+        if (dto[key] !== undefined) {
+          (data as any)[key] = dto[key];
+        }
+      }
+
+      // #2 --- Update nested location
+      if (dto.location) {
+        data.location = {
+          update: Object.fromEntries(
+            Object.entries(dto.location).filter(([, v]) => v !== undefined),
+          ),
+        };
+      }
+
+      // #3 --- Perform the actual update
+      const updated = await tx.boardingHouse.update({
         where: { id },
-        data: {
-          ...(updateBoardingHouseDto.name && {
-            name: updateBoardingHouseDto.name,
-          }),
-          ...(updateBoardingHouseDto.address && {
-            address: updateBoardingHouseDto.address,
-          }),
-          ...(updateBoardingHouseDto.description && {
-            description: updateBoardingHouseDto.description,
-          }),
-          ...(updateBoardingHouseDto.availabilityStatus && {
-            availabilityStatus: updateBoardingHouseDto.availabilityStatus,
-          }),
-          ...(updateBoardingHouseDto.amenities && {
-            amenities: updateBoardingHouseDto.amenities,
-          }),
-        },
+        data,
+        include: { location: true },
       });
 
-      return updated;
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === 'P2025'
-      ) {
-        throw new NotFoundException(`Boarding house with ID ${id} not found.`);
+      // #4 --- Handle NEW UPLOADED IMAGES (non-destructive)
+      // follows your create() behavior
+      if (images?.files.thumbnail) {
+        await this.imageService.uploadImagesTransact(
+          tx,
+          images.files.thumbnail,
+          {
+            type: 'BOARDING_HOUSE',
+            targetId: id,
+            mediaType: MediaType.THUMBNAIL,
+          },
+          {
+            resourceId: id,
+            resourceType: ResourceType.BOARDING_HOUSE,
+            mediaType: MediaType.THUMBNAIL,
+          },
+        );
       }
-      throw error;
-    }
+
+      if (images?.removeGalleryIds?.length) {
+        const ids = images?.removeGalleryIds;
+        for (const id of ids) {
+          await tx.image.update({
+            where: {
+              id: id,
+            },
+            data: {
+              isDeleted: true,
+              deletedAt: new Date(),
+            },
+          });
+        }
+      }
+
+      if (images?.files.thumbnail) {
+        await this.imageService.uploadImagesTransact(
+          tx,
+          images?.files.thumbnail,
+          {
+            type: 'BOARDING_HOUSE',
+            targetId: id,
+            mediaType: MediaType.THUMBNAIL,
+          },
+          {
+            resourceId: id,
+            resourceType: ResourceType.BOARDING_HOUSE,
+            mediaType: MediaType.THUMBNAIL,
+          },
+        );
+      }
+      if (images?.files.gallery) {
+        await this.imageService.uploadImagesTransact(
+          tx,
+          images?.files.gallery,
+          {
+            type: 'BOARDING_HOUSE',
+            targetId: id,
+            mediaType: MediaType.GALLERY,
+          },
+          {
+            resourceId: id,
+            resourceType: ResourceType.BOARDING_HOUSE,
+            mediaType: MediaType.GALLERY,
+          },
+        );
+      }
+
+      return updated;
+    });
   }
 
   async remove(id: number) {
@@ -349,6 +435,7 @@ export class BoardingHousesService {
       data: { isDeleted: true },
     });
   }
+
 
   // TODO: delete images
   // TODO: update images
@@ -386,3 +473,18 @@ export class BoardingHousesService {
     return 'not finished route'; //!
   }
 }
+
+/**
+ * JSON
+ * name: {
+ * firstname: "dsadsad",
+ * lastname: "dsadsa"
+ * }
+ * fileCoordinatr: {
+ * file1: {
+ *    id: 1, fileName: file1 }
+ * }
+ *
+ * file1: "dasdasdasdasd"
+ * file2: "sadsad"
+ */

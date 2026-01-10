@@ -224,8 +224,12 @@ export class OwnersService {
     const verificationDocumentOwnerID =
       await prisma.verificationDocument.findUnique({
         where: { id: verificationDocumentId },
-        select: { ownerId: true },
+        select: { userId: true, userType: true },
       });
+
+    const searchOwner = await prisma.owner.findUnique({
+      where: { id: verificationDocumentOwnerID?.userId },
+    });
 
     if (!verificationDocumentOwnerID) {
       throw new NotFoundException(
@@ -233,9 +237,9 @@ export class OwnersService {
       );
     }
 
-    if (!verificationDocumentOwnerID.ownerId) {
+    if (!searchOwner) {
       throw new NotFoundException(
-        `Verification Document ${verificationDocumentId} not found`,
+        `User ${verificationDocumentId} Verification Document does not exist, ${searchOwner}`,
       );
     }
 
@@ -245,8 +249,8 @@ export class OwnersService {
       file,
       {
         type: 'OWNER',
-        // so it was +verificationDocumentOwnerID but object cant coerce with number returns NAN bug
-        targetId: verificationDocumentOwnerID.ownerId,
+        //! so it was +verificationDocumentOwnerID but object cant coerce with number returns NAN bug
+        targetId: verificationDocumentOwnerID.userId,
         mediaType: MediaType.DOCUMENT,
       },
       {
@@ -336,6 +340,13 @@ export class OwnersService {
       owner.length > 0 && // must have at least one document
       missingVerificationDocuments.length === 0 && // no missing documents
       owner.every((doc) => doc.verificationStatus === 'APPROVED');
+
+    await this.prisma.owner.update({
+      where: { id: ownerId },
+      data: {
+        isVerified: verified,
+      },
+    });
 
     return {
       verified,

@@ -1,4 +1,10 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ImATeapotException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { PrismaService } from 'src/infrastructure/database/prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
@@ -28,13 +34,15 @@ export class RoomsService {
     tx: DBClient = this.prisma,
   ): Promise<void> {
     for (const room of rooms) {
-      const { gallery, thumbnail, roomType, ...roomData } = room;
+      const { gallery, thumbnail, roomType, furnishingType, ...roomData } =
+        room;
 
       // Create the room first to get its ID
       const createdRoom = await tx.room.create({
         data: {
           ...roomData,
           roomType: roomType,
+          furnishingType: furnishingType,
           boardingHouseId,
         },
       });
@@ -169,18 +177,35 @@ export class RoomsService {
 
   async patch(roomId: number, roomData: UpdateRoomDto) {
     const prisma = this.prisma;
+
+    // Remove undefined fields → real PATCH behavior
+    const dataToUpdate = Object.fromEntries(
+      Object.entries(roomData).filter(([_, v]) => v !== undefined),
+    );
+
+    if (Object.keys(dataToUpdate).length === 0) {
+      throw new BadRequestException('No fields provided to update.');
+    }
+
+    // Check if room exists
+    const existingRoom = await prisma.room.findUnique({
+      where: { id: roomId },
+    });
+
+    if (!existingRoom) {
+      throw new NotFoundException(`Room with ID ${roomId} not found.`);
+    }
+
+    // Perform update
     return prisma.room.update({
-      where: {
-        id: roomId,
-      },
-      data: {
-        ...roomData,
-      },
+      where: { id: roomId },
+      data: dataToUpdate,
     });
   }
 
   remove(id: number) {
     const prisma = this.prisma;
+
     return prisma.room.update({
       where: {
         id: id,

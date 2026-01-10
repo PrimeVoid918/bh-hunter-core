@@ -1,8 +1,6 @@
 import {
   IsBoolean,
-  IsEnum,
   IsInt,
-  IsNotEmpty,
   IsNumberString,
   IsOptional,
   IsString,
@@ -15,8 +13,8 @@ export class UpdateRoomDto {
   roomNumber?: string;
 
   @IsString()
-  @IsNotEmpty()
-  description!: string;
+  @IsOptional()
+  description?: string;
 
   @IsInt()
   @IsOptional()
@@ -31,5 +29,6 @@ export class UpdateRoomDto {
   tags?: Record<string, any>;
 
   @IsBoolean()
+  @IsOptional()
   availabilityStatus?: boolean;
 }

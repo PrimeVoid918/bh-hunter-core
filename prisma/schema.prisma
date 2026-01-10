@@ -82,7 +82,7 @@ enum RoomType {
 enum RoomFurnishingEnumSchema {
   UNFURNISHED
   SEMI_FURNISHED
-  FULLY_UNFURNISHED
+  FULLY_FURNISHED
 }
 
 enum OccupancyType {
@@ -261,7 +261,7 @@ model Room {
   currentCapacity     Int                      @default(0)
   price               Decimal                  @db.Decimal(10, 2)
   roomType            RoomType                 @default(SINGLE)
-  furnishing          RoomFurnishingEnumSchema @default(UNFURNISHED)
+  furnishingType      RoomFurnishingEnumSchema @default(UNFURNISHED)
   tags                Json?
   availabilityStatus  Boolean                  @default(true)
   createdAt           DateTime                 @default(now())

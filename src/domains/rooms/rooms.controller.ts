@@ -58,7 +58,7 @@ export class RoomsController {
   }
 
   @Patch(':id')
-  update(@Param(':roomId') roomId: string, @Body() data: UpdateRoomDto) {
+  update(@Param('id') roomId: string, @Body() data: UpdateRoomDto) {
     return this.roomsService.patch(+roomId, data);
   }
 

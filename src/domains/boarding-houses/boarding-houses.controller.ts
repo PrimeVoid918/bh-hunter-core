@@ -162,11 +162,31 @@ export class BoardingHousesController {
   }
 
   @Patch(':id')
+  @UseInterceptors(AnyFilesInterceptor(createMulterConfig('image')))
   update(
     @Param('id') id: string,
     @Body() updateBoardingHouseDto: UpdateBoardingHouseDto,
+    @UploadedFiles() files: Express.Multer.File[],
   ) {
-    return this.boardingHousesService.update(+id, updateBoardingHouseDto);
+    const fileMap: Record<string, Express.Multer.File[]> = (files ?? []).reduce(
+      (acc, file) => {
+        if (!file.buffer || file.size === 0) {
+          throw new BadRequestException(
+            `Empty file received: ${file.originalname}`,
+          );
+        }
+
+        (acc[file.fieldname] ||= []).push(file);
+        return acc;
+      },
+      {} as Record<string, Express.Multer.File[]>,
+    );
+
+    return this.boardingHousesService.update(+id, updateBoardingHouseDto, {
+      files: fileMap,
+      removeGalleryIds: updateBoardingHouseDto.removeGalleryIds ?? [],
+      removeThumbnailId: updateBoardingHouseDto.removeThumbnailId ?? undefined,
+    });
   }
 
   @Delete(':id')

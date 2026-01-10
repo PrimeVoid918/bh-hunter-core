@@ -35,14 +35,19 @@ export class CreateRoomsDto {
   @Type(() => Number)
   currentCapacity?: number = 1;
 
+  @Type(() => Number)
   @IsNumber()
   @IsNotEmpty()
   price!: number;
 
-  @IsEnum(RoomType)
+  @IsEnum(RoomType, {
+    message: `occupancyType must be one of: ${Object.values(RoomType).join(', ')}`,
+  })
   roomType!: RoomType;
 
-  @IsEnum(RoomFurnishingEnumSchema)
+  @IsEnum(RoomFurnishingEnumSchema, {
+    message: `occupancyType must be one of: ${Object.values(RoomFurnishingEnumSchema).join(', ')}`,
+  })
   furnishingType!: RoomFurnishingEnumSchema;
 
   @IsOptional()
