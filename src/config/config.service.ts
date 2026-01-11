@@ -31,6 +31,10 @@ export class ConfigService {
     return this.configService.get<string>('JWT_SECRET_KEY');
   }
 
+  get ALLOW_NO_JWT_SOCKET() {
+    return this.configService.get<string>('ALLOW_NO_JWT_SOCKET');
+  }
+
   get mediaPaths(): {
     public: string;
     private: string;

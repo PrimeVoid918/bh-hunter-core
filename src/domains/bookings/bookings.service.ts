@@ -21,6 +21,7 @@ import {
 import { ImageService } from 'src/infrastructure/image/image.service';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
 import { UserUnionService } from '../auth/userUnion.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Injectable()
 export class BookingsService {
@@ -28,6 +29,7 @@ export class BookingsService {
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly userUnionService: UserUnionService,
     private readonly imageService: ImageService,
+    private eventEmitter: EventEmitter2,
   ) {}
 
   private get prisma() {
@@ -41,6 +43,8 @@ export class BookingsService {
     });
 
     if (!room) throw new Error(`Room ${roomId} not found`);
+
+    // this.socketCreateBooking(booking);
 
     return this.prisma.booking.create({
       data: {
@@ -428,6 +432,18 @@ export class BookingsService {
 
     return booking; // ✅ return it so the caller can use the data directly
   }
+
+  async socketCreateBooking(booking: CreateBookingDto) {
+    // Just "fire" the event and forget about it.
+    // The Bookings domain doesn't care HOW the user is notified.
+    this.eventEmitter.emit('booking.created', {
+      tenanId: booking.tenantId,
+      message: 'You have a new booking request!',
+      data: booking,
+    });
+
+    return booking;
+  }
 }
 // PENDING_REQUEST
 // AWAITING_PAYMENT
@@ -435,64 +451,3 @@ export class BookingsService {
 // CANCELLED_BOOKING
 // REJECTED_BOOKING
 // COMPLETED_BOOKING
-
-/*
-
-is this `  async createPaymentProof(
-    bookId: number,
-    payload: CreatePaymentProofDTO,
-    files: Express.Multer.File[],
-  ) {
-    const { tenantId, note } = payload;
-    console.log('file send:', files);
-
-    // 1️ Verify the booking exists and belongs to the tenant
-    const booking = await this.validateBookingAccess(
-      bookId,
-      tenantId,
-      'TENANT',
-    );
-
-    // 2️ Verify booking status is valid for uploading payment proof
-    if (booking.status !== BookingStatus.AWAITING_PAYMENT) {
-      throw new BadRequestException('This booking is not awaiting payment');
-    }
-
-    // 3️ Upload the image(s)
-    return this.prisma.$transaction(async (tx) => {
-      const uploadedImageIds = await this.imageService.uploadImagesTransact(
-        tx,
-        files,
-        {
-          type: 'TENANT',
-          targetId: +tenantId,
-          childId: bookId,
-          mediaType: MediaType.PAYMENT,
-        },
-        {
-          resourceId: +tenantId,
-          resourceType: ResourceType.TENANT,
-          mediaType: MediaType.PAYMENT,
-        },
-        {
-          isPublic: false,
-        },
-      );
-
-      const proofImage = await this.prisma.image.findUnique({
-        where: { id: uploadedImageIds[0] },
-      });
-
-      return await tx.booking.update({
-        where: { id: booking.id },
-        data: {
-          paymentProofUrl: proofImage?.url ?? null,
-          tenantMessage: note ?? null,
-          status: 'PAYMENT_APPROVAL', // ✅ now waiting for owner to verify
-          updatedAt: new Date(),
-        },
-      });
-    });
-  }` atomic enough you think? like the boarding house that i made?
-
-*/

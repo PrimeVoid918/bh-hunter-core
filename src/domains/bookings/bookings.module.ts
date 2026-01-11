@@ -11,6 +11,7 @@ import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path
 import { VerifcationService } from 'src/domains/verifications/verification.service';
 import { Logger } from 'src/common/logger/logger.service';
 import { DocumentService } from 'src/infrastructure/document/document.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 @Module({
   controllers: [BookingsController],
@@ -30,6 +31,7 @@ import { DocumentService } from 'src/infrastructure/document/document.service';
       useValue: 'media', // or your base directory path
     },
     DocumentService,
+    EventEmitter2,
   ],
 })
 export class BookingsModule {}
