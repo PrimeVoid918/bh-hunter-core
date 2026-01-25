@@ -10,6 +10,7 @@ import { ConfigService } from './config/config.service';
 import { resolve } from 'path';
 import { ExpressAdapter } from '@nestjs/platform-express';
 import { existsSync } from 'fs';
+import { generateDiagram } from './spelunk';
 
 async function bootstrap() {
   const server = express();
@@ -53,6 +54,8 @@ async function bootstrap() {
     }),
   );
   SwaggerModule.setup('docs', app, document, options);
+
+  await generateDiagram();
 
   app.enableCors({
     origin: [
