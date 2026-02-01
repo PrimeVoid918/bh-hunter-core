@@ -21,7 +21,7 @@ import {
 import { ImageService } from 'src/infrastructure/image/image.service';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
 import { UserUnionService } from '../auth/userUnion.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { BookingEventPublisher } from './events/bookings.publisher';
 
 @Injectable()
 export class BookingsService {
@@ -29,7 +29,7 @@ export class BookingsService {
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly userUnionService: UserUnionService,
     private readonly imageService: ImageService,
-    private eventEmitter: EventEmitter2,
+    private readonly bookingEventPublisher: BookingEventPublisher,
   ) {}
 
   private get prisma() {
@@ -39,14 +39,12 @@ export class BookingsService {
   async createBooking(roomId: number, booking: CreateBookingDto) {
     const room = await this.prisma.room.findUnique({
       where: { id: roomId },
-      select: { boardingHouseId: true },
+      select: { boardingHouseId: true, boardingHouse: true },
     });
 
     if (!room) throw new Error(`Room ${roomId} not found`);
 
-    // this.socketCreateBooking(booking);
-
-    return this.prisma.booking.create({
+    const bookingResult = await this.prisma.booking.create({
       data: {
         room: { connect: { id: roomId } },
         tenant: { connect: { id: booking.tenantId } },
@@ -56,7 +54,29 @@ export class BookingsService {
         reference: `BK-${Date.now()}`,
         dateBooked: new Date(),
       },
+      include: {
+        tenant: {
+          select: {
+            firstname: true,
+            lastname: true,
+          },
+        },
+      },
     });
+
+    this.bookingEventPublisher.requested({
+      bookingId: bookingResult.id,
+      tenantId: bookingResult.tenantId,
+      tenant: {
+        firstname: bookingResult.tenant.firstname,
+        lastname: bookingResult.tenant.lastname,
+      },
+      ownerId: room.boardingHouse.ownerId,
+      roomId: roomId,
+      boardingHouseId: room.boardingHouseId,
+    });
+
+    return bookingResult;
   }
 
   findAll(filter: FindAllBookingFilterDto): Promise<Booking[]> {
@@ -213,7 +233,8 @@ export class BookingsService {
         'Only pending requests can be approved by the owner',
       );
     }
-    return await this.prisma.booking.update({
+
+    const approveBooking = await this.prisma.booking.update({
       where: { id: bookId },
       data: {
         status: BookingStatus.AWAITING_PAYMENT, // ✅ waiting for proof
@@ -221,6 +242,15 @@ export class BookingsService {
         updatedAt: new Date(),
       },
     });
+
+    //! notification partial integration
+    this.bookingEventPublisher.approved({
+      bookingId: bookId,
+      tenantId: approveBooking.tenantId,
+      ownerId: ownerId,
+    });
+
+    return approveBooking;
   }
 
   async patchRejectBooking(
@@ -431,18 +461,6 @@ export class BookingsService {
     }
 
     return booking; // ✅ return it so the caller can use the data directly
-  }
-
-  async socketCreateBooking(booking: CreateBookingDto) {
-    // Just "fire" the event and forget about it.
-    // The Bookings domain doesn't care HOW the user is notified.
-    this.eventEmitter.emit('booking.created', {
-      tenanId: booking.tenantId,
-      message: 'You have a new booking request!',
-      data: booking,
-    });
-
-    return booking;
   }
 }
 // PENDING_REQUEST

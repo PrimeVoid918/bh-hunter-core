@@ -87,47 +87,47 @@ export class RoomsService {
   }
 
   async findAll(bhId: number) {
-    const prisma = this.prisma;
+    if (!bhId) throw new BadRequestException('Boarding house ID is required');
 
-    const room = await prisma.room.findMany({
-      where: {
-        boardingHouseId: bhId,
-      },
+    const rooms = await this.prisma.room.findMany({
+      where: { boardingHouseId: bhId },
     });
 
+    // Fetch images for all room IDs in a single query
+    const roomIds = rooms.map((r) => r.id);
     const images = await this.prisma.image.findMany({
       where: {
-        entityType: 'ROOM',
-        entityId: bhId,
+        entityType: ResourceType.ROOM,
+        entityId: { in: roomIds },
       },
     });
 
-    // const thumbnail = images
-    //   .filter((img) => img.type === 'THUMBNAIL')
-    //   .map((img) => this.imageService.getMediaPath(img.url, true));
+    // Merge images per room
+    const roomsWithImages = await Promise.all(
+      rooms.map(async (room) => {
+        const roomImages = images.filter((img) => img.entityId === room.id);
 
-    // const gallery = images
-    //   .filter((img) => img.type === 'GALLERY')
-    //   .map((img) => this.imageService.getMediaPath(img.url, true));
+        const { gallery } = await this.imageService.getImageMetaData(
+          roomImages,
+          (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
+          ResourceType.ROOM,
+          room.id,
+          [MediaType.GALLERY],
+        );
 
-    const { gallery, thumbnail } = await this.imageService.getImageMetaData(
-      images,
-      (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
-      ResourceType.ROOM,
-      bhId,
-      [MediaType.GALLERY],
+        const { thumbnail } = await this.imageService.getImageMetaData(
+          roomImages,
+          (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
+          ResourceType.ROOM,
+          room.id,
+          [MediaType.THUMBNAIL],
+        );
+
+        return { ...room, gallery, thumbnail };
+      }),
     );
 
-    if (!room) {
-      throw new NotFoundException(
-        'Room not found or does not belong to this boarding house.',
-      );
-    }
-    return {
-      ...room,
-      thumbnail,
-      gallery,
-    };
+    return roomsWithImages;
   }
 
   async findOne(bhId: number, roomId: number) {

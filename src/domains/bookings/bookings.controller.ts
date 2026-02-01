@@ -105,6 +105,7 @@ export class BookingsController {
     const createPaymentProof: CreatePaymentProofDTO = {
       ...payload,
       tenantId: +payload.tenantId,
+      ownerId: +payload.ownerId,
     };
 
     return this.bookingsService.createPaymentProof(

@@ -93,6 +93,9 @@ export class PatchTenantBookDto {
   @IsNumber()
   tenantId!: number;
 
+  @IsNumber()
+  ownerId!: number;
+
   @Type(() => Date)
   @IsOptional()
   @IsDate()
@@ -115,6 +118,9 @@ export class PatchApprovePayloadDTO {
   @IsNumber()
   ownerId!: number;
 
+  @IsNumber()
+  tenantId!: number;
+
   @IsOptional()
   @IsString()
   message?: string; // optional message to tenant
@@ -127,6 +133,9 @@ export class PatchBookingRejectionPayloadDTO {
   @IsNumber()
   ownerId!: number;
 
+  @IsNumber()
+  tenantId!: number;
+
   @IsString()
   reason!: string;
 }
@@ -137,6 +146,9 @@ export class PatchBookingRejectionPayloadDTO {
 export class CreatePaymentProofDTO {
   @IsNumber()
   tenantId!: number;
+
+  @IsNumber()
+  ownerId!: number;
 
   // @IsString()
   // paymentProofUrl!: string; // could be file URL or base64
@@ -153,6 +165,9 @@ export class PatchVerifyPaymentDto {
   @IsNumber()
   ownerId!: number;
 
+  @IsNumber()
+  tenantId!: number;
+
   @IsOptional()
   @IsString()
   remarks?: string;
@@ -167,7 +182,7 @@ export class PatchVerifyPaymentDto {
  */
 export class CancelBookingDto {
   @IsNumber()
-  userId!: number; // can be tenant or owner
+  userId!: number;
 
   @IsString()
   role!: 'TENANT' | 'OWNER';

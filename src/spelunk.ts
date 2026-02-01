@@ -20,6 +20,6 @@ export async function generateDiagram() {
     })
     .map(({ from, to }) => `${from.module.name} --> ${to.module.name}`);
 
-  console.log(`graph TD\n\t${mermaidEdges.join('\n\t')}`);
+  // console.log(`graph TD\n\t${mermaidEdges.join('\n\t')}`);
   await app.close();
 }

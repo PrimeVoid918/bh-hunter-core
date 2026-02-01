@@ -69,6 +69,7 @@ enum ResourceType {
   ADMIN
   BOARDING_HOUSE
   ROOM
+  BOOKING
 }
 
 enum RoomType {
@@ -335,6 +336,57 @@ model AuditLog {
   deletedAt DateTime?
   ipAddress String?
   userAgent String?
+}
+
+enum NotificationType {
+  // Booking
+  BOOKING_REQUESTED
+  BOOKING_APPROVED
+  BOOKING_REJECTED
+  PAYMENT_UPLOADED
+  PAYMENT_APPROVED
+  BOOKING_CANCELLED
+  BOOKING_COMPLETED
+
+  // Verification
+  VERIFICATION_APPROVED
+  VERIFICATION_REJECTED
+
+  // Property updates
+  BOARDING_HOUSE_UPDATED
+  BOARDING_AVAILABILITY_CHANGED
+  ROOM_UPDATED
+  ROOM_AVAILABILITY_CHANGED
+
+  // System
+  SYSTEM
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+}
+
+model Notification {
+  id            Int              @id @default(autoincrement())
+  recipientRole UserRole
+  recipientId   Int
+  type          NotificationType
+  title         String
+  message       String
+  entityType    ResourceType
+  entityId      Int
+
+  // Optional metadata (deep links, extra payload)
+  data Json?
+
+  channel   NotificationChannel @default(IN_APP)
+  isRead    Boolean             @default(false)
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+  expiresAt DateTime?
+  isDeleted Boolean             @default(false)
 }
 
 //* do this to change Json to JSONB

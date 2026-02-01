@@ -12,10 +12,13 @@ import { VerifcationService } from 'src/domains/verifications/verification.servi
 import { Logger } from 'src/common/logger/logger.service';
 import { DocumentService } from 'src/infrastructure/document/document.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { BookingEventPublisher } from './events/bookings.publisher';
 
 @Module({
+  imports: [],
   controllers: [BookingsController],
   providers: [
+    BookingEventPublisher,
     BookingsService,
     UserUnionService,
     ImageService,

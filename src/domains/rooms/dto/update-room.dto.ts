@@ -16,10 +16,15 @@ export class UpdateRoomDto {
   @IsOptional()
   description?: string;
 
-  @IsInt()
+  @IsNumberString()
   @IsOptional()
   @Type(() => Number)
   capacity?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Type(() => Number)
+  maxCapacity?: number;
 
   @IsNumberString()
   @IsOptional()

@@ -7,7 +7,7 @@ import { Socket } from 'socket.io';
 export class WsAuthGuard implements CanActivate {
   constructor(private configService: ConfigService) {}
 
-  async canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     // 1. Check the "Master Toggle" from your ENV
     const allowNoAuth =
       this.configService.get<string>('ALLOW_NO_JWT_SOCKET') === 'true';
