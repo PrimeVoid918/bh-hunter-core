@@ -11,9 +11,14 @@ const mimeTypes: Record<FileType, RegExp> = {
   pdf: /pdf/,
 };
 
+// const mimeTypes: Record<FileType, RegExp> = {
+//   image: /^image\/(jpeg|jpg|png)$/,
+//   pdf: /^application\/pdf$/,
+// };
+
 const maxSizes: Record<FileType, number> = {
   image: 15 * 1024 * 1024, // 15MB limit
-  pdf: 15 * 1024 * 1024, // 15MB limit  
+  pdf: 15 * 1024 * 1024, // 15MB limit
 };
 
 export function createMulterConfig(

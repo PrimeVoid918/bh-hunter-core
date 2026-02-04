@@ -7,41 +7,73 @@ import {
   Param,
   Delete,
   BadRequestException,
+  UseInterceptors,
+  UploadedFiles,
 } from '@nestjs/common';
 import { RoomsService } from './rooms.service';
 import { CreateRoomsDto } from './dto/create-rooms.dto';
 import { UpdateRoomDto } from './dto/update-room.dto';
+import { CreateRoomsWithGallery } from './types';
+import { AnyFilesInterceptor } from '@nestjs/platform-express';
+import { createMulterConfig } from 'src/infrastructure/shared/utils/multer-config.util';
 
 @Controller('boarding-houses/:boardingHouseId/rooms')
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
   @Post()
-  create(
+  @UseInterceptors(AnyFilesInterceptor(createMulterConfig('image')))
+  async create(
     @Param('boardingHouseId') boardingHouseId: string,
-    @Body() createRoomDtos: CreateRoomsDto[],
+    @Body() payload: Record<string, string>,
+    @UploadedFiles() files: Express.Multer.File[] = [], // <--- default empty array
   ) {
-    //* loops all through rooms to check if they belong to the same boarding house
-    const uniqueBHIds = new Set(
-      createRoomDtos.map((room) => room.boardingHouseId),
+    const fileMap = files.reduce(
+      (acc, file) => {
+        if (!file.buffer || file.size === 0) {
+          throw new BadRequestException(
+            `Empty file received: ${file.originalname}`,
+          );
+        }
+        acc[file.fieldname] = acc[file.fieldname] || [];
+        acc[file.fieldname].push(file);
+        return acc;
+      },
+      {} as Record<string, Express.Multer.File[]>,
     );
 
-    if (uniqueBHIds.size > 1) {
+    // --- 2️⃣ Parse rooms JSON ---
+    const rooms = JSON.parse(payload.rooms ?? '[]') as CreateRoomsDto[];
+
+    // --- 3️⃣ Attach gallery & thumbnail ---
+    const enrichedRooms: CreateRoomsWithGallery[] = rooms.map((room, index) => {
+      const galleryFiles = Object.keys(fileMap)
+        .filter((key) => key.startsWith(`roomGallery${index}_`))
+        .map((key) => fileMap[key])
+        .flat();
+
+      const thumbnailFiles = Object.keys(fileMap)
+        .filter((key) => key.startsWith(`roomThumbnail${index}_`))
+        .map((key) => fileMap[key])
+        .flat();
+
+      return {
+        ...room,
+        gallery: galleryFiles,
+        thumbnail: thumbnailFiles,
+      };
+    });
+
+    // --- 4️⃣ Validate boardingHouseId ---
+    const uniqueBHIds = new Set(enrichedRooms.map((r) => r.boardingHouseId));
+    if (uniqueBHIds.size > 1 || !uniqueBHIds.has(+boardingHouseId)) {
       throw new BadRequestException(
-        'All rooms must belong to the same boarding house.',
+        `Mismatch between URL boardingHouseId and rooms body`,
       );
     }
 
-    //* warn if id does not match the one in the URL
-    if (
-      createRoomDtos.length > 0 &&
-      uniqueBHIds.has(+boardingHouseId) === false
-    ) {
-      throw new BadRequestException(
-        `Mismatch between URL boardingHouseId (${boardingHouseId}) and body.`,
-      );
-    }
-    return this.roomsService.create(createRoomDtos, +boardingHouseId);
+    // --- 5️⃣ Call service ---
+    return this.roomsService.create(enrichedRooms, +boardingHouseId);
   }
 
   @Get()

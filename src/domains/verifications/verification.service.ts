@@ -161,6 +161,12 @@ export class VerifcationService {
             lastname: true,
           },
         },
+        tenant: {
+          select: {
+            firstname: true,
+            lastname: true,
+          },
+        },
       },
     });
 

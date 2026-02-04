@@ -37,12 +37,23 @@ export class RoomsService {
       const { gallery, thumbnail, roomType, furnishingType, ...roomData } =
         room;
 
-      // Create the room first to get its ID
+      // Validate numeric fields
+      const maxCapacity = Number(roomData.maxCapacity);
+      const price = Number(roomData.price);
+
+      if (isNaN(maxCapacity) || isNaN(price)) {
+        throw new BadRequestException(
+          `Invalid number for maxCapacity or price: ${roomData.maxCapacity}, ${roomData.price}`,
+        );
+      }
+
       const createdRoom = await tx.room.create({
         data: {
           ...roomData,
-          roomType: roomType,
-          furnishingType: furnishingType,
+          maxCapacity,
+          price,
+          roomType,
+          furnishingType,
           boardingHouseId,
         },
       });

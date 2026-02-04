@@ -4,6 +4,7 @@ import {
   IsEmail,
   IsNumber,
   IsBoolean,
+  IsDateString,
 } from 'class-validator';
 
 export class UpdateTenantDto {
@@ -43,7 +44,6 @@ export class UpdateTenantDto {
   @IsString()
   phone_number?: string;
 
-  // ✅ Backend-controlled fields for admin panel, verification, etc.
   @IsOptional()
   @IsBoolean()
   isDeleted?: boolean;
@@ -55,4 +55,13 @@ export class UpdateTenantDto {
   @IsOptional()
   @IsBoolean()
   isVerified?: boolean;
+
+  // ✅ Fields you were missing
+  @IsOptional()
+  @IsBoolean()
+  hasAcceptedLegitimacyConsent?: boolean;
+
+  @IsOptional()
+  @IsDateString()
+  consentAcceptedAt?: string;
 }

@@ -64,7 +64,7 @@ export class OwnersController {
   findOnePermits(@Param('id', ParseIntPipe) id: string) {
     return this.ownersService.findOneVerificationDocument(+id);
   }
-  @Get(':id/permit-verification-status')
+  @Get(':id/permits-verification-status')
   findPermitStatus(@Param('id', ParseIntPipe) id: string) {
     return this.ownersService.getVerificationStatus(+id);
   }

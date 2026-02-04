@@ -16,7 +16,6 @@ import { VerifcationService } from '../verifications/verification.service';
 import { CreateVerifcationDto } from 'src/domains/verifications/dto/create-verifcation.dto';
 import { UpdateVerifcationDto } from 'src/domains/verifications/dto/update-verifcation.dto';
 import { Logger } from 'src/common/logger/logger.service';
-import { VerificationInputSchema } from '../verifications/schemas/verification-document.schema';
 import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.exceptions';
 import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-validation.utils';
 
@@ -123,15 +122,18 @@ export class OwnersService {
   }
 
   async create(dto: CreateOwnerDto) {
-    const existing = await this.prisma.owner.findUnique({
-      where: { email: dto.email, username: dto.username },
+    const existing = await this.prisma.owner.findFirst({
+      where: {
+        OR: [{ email: dto.email }, { username: dto.username }],
+      },
     });
 
-    if (existing?.email) {
-      return new BadRequestException('Email is already in use');
+    if (existing?.email === dto.email) {
+      throw new ConflictException('Email is already in use');
     }
-    if (existing?.username) {
-      return new BadRequestException('Username is already in use');
+
+    if (existing?.username === dto.username) {
+      throw new ConflictException('Username is already in use');
     }
 
     return this.prisma.owner.create({
@@ -370,11 +372,9 @@ export class OwnersService {
 
     try {
       // 1️⃣ Fetch the verification document
-      const verificationDocument = await prisma.verificationDocument.findUnique(
-        {
-          where: { id },
-        },
-      );
+      const verificationDocument = await prisma.verificationDocument.findFirst({
+        where: { id: id, userType: 'OWNER' },
+      });
 
       if (!verificationDocument) {
         throw new NotFoundException('Verification document not found.');
@@ -449,6 +449,10 @@ export class OwnersService {
     ownerId: number,
     verificationDocumentId: number,
   ) {
+    if (!verificationDocumentId || isNaN(verificationDocumentId)) {
+      throw new BadRequestException('Invalid document ID.');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       // Get Verification Document to find the filePath/url
       const verificationDocuments = await tx.verificationDocument.findFirst({
@@ -473,39 +477,52 @@ export class OwnersService {
   }
 
   async update(id: number, updateOwnerDto: UpdateOwnerDto) {
-    const prisma = this.prisma;
-    return await prisma.owner.update({
-      where: {
-        id: id,
-      },
-      data: {
-        username: updateOwnerDto.username,
-        firstname: updateOwnerDto.firstname,
-        lastname: updateOwnerDto.lastname,
-        email: updateOwnerDto.email,
-        consentAcceptedAt: updateOwnerDto.consentAcceptedAt,
-        hasAcceptedLegitimacyConsent:
-          updateOwnerDto.hasAcceptedLegitimacyConsent,
-        // TODO: why uncommenting the password returns an error?
-        // password: updateOwnerDto.password,
-        age: updateOwnerDto.age,
-        address: updateOwnerDto.address,
-        phone_number: updateOwnerDto.phone_number,
-        isDeleted: updateOwnerDto.isDeleted,
-      },
-    });
+    if (!id) throw new BadRequestException('Id is required');
+
+    // Remove undefined fields to avoid Prisma overwriting required fields with undefined
+    const dataToUpdate = Object.fromEntries(
+      Object.entries(updateOwnerDto).filter(([_, v]) => v !== undefined),
+    );
+
+    const existingOwner = await this.prisma.owner.findUnique({ where: { id } });
+    if (!existingOwner)
+      throw new NotFoundException(`Owner with id ${id} not found`);
+
+    try {
+      const updatedOwner = await this.prisma.owner.update({
+        where: { id },
+        data: dataToUpdate,
+      });
+
+      // Optionally, remove sensitive fields
+      const { password, ...safeOwner } = updatedOwner;
+      return safeOwner;
+    } catch (error: any) {
+      if (isPrismaErrorCode(error, 'P2002')) {
+        throw new ConflictException('Username or email already exists');
+      }
+      throw new InternalServerErrorException('Failed to update owner');
+    }
   }
 
   async remove(id: number) {
-    // TODO: fix this
     const prisma = this.prisma;
-    const entity = await prisma.owner.findUnique({ where: { id } });
-    if (!entity || entity.isDeleted) throw new NotFoundException('Not found');
 
-    return this.prisma.owner.update({
+    const entity = await prisma.owner.findUnique({ where: { id } });
+    if (!entity) throw new NotFoundException(`Owner with id ${id} not found`);
+    if (entity.isDeleted)
+      throw new NotFoundException(`Owner with id ${id} is already deleted`);
+
+    const deletedOwner = await prisma.owner.update({
       where: { id },
-      data: { isDeleted: true },
+      data: {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
     });
+
+    const { password, ...safeOwner } = deletedOwner;
+    return safeOwner;
   }
 }
 
