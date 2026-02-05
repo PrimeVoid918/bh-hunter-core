@@ -152,6 +152,7 @@ model Tenant {
   deletedAt                    DateTime?
   bookings                     Booking[]
   verificationDocuments        VerificationDocument[]
+  reviews                      Review[]
 }
 
 model Owner {
@@ -215,6 +216,21 @@ model BoardingHouse {
   deletedAt          DateTime?
   rooms              Room[]
   Booking            Booking[]
+  reviews            Review[]
+}
+
+model Review {
+  id              Int           @id @default(autoincrement())
+  tenantId        Int
+  boardingHouseId Int
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  boardingHouse   BoardingHouse @relation(fields: [boardingHouseId], references: [id], onDelete: Cascade)
+  rating          Int
+  comment         String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  isDeleted       Boolean       @default(false)
+  deletedAt       DateTime?
 }
 
 model Location {

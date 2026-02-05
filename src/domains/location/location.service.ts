@@ -55,6 +55,16 @@ export class LocationService {
     return result;
   }
 
+  /**
+   * @for findNearby
+   * SELECT *, 
+   * ST_Distance(coordinates::geography, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography) as distance_meters
+   * FROM "Location"
+   * WHERE ST_DWithin(coordinates::geography, ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography, ${radiusInMeters})
+   * ORDER BY distance_meters ASC
+   *  
+   */
+
   async create(locationData: LocationDto): Promise<number> {
     if (typeof locationData === 'string') {
       locationData = JSON.parse(locationData);

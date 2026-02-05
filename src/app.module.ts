@@ -26,6 +26,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { Logger } from './common/logger/logger.service';
 import { MapsModule } from './domains/maps/maps.module';
 import { SocketModule } from './infrastructure/sockets/sockets.module';
+import { ReviewsModule } from './domains/reviews/reviews.module';
 
 @Module({
   imports: [
@@ -55,6 +56,7 @@ import { SocketModule } from './infrastructure/sockets/sockets.module';
     SharedModule,
     MapsModule,
     SocketModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [

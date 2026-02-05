@@ -229,7 +229,7 @@ export class TenantsService {
 
   /**
    * Verification Document Section
-   * @returns
+   *
    */
 
   async findAllVerificationDocument() {
