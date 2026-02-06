@@ -27,6 +27,7 @@ import { Logger } from './common/logger/logger.service';
 import { MapsModule } from './domains/maps/maps.module';
 import { SocketModule } from './infrastructure/sockets/sockets.module';
 import { ReviewsModule } from './domains/reviews/reviews.module';
+import { PaymentsModule } from './domains/payments/payments.module';
 
 @Module({
   imports: [
@@ -57,6 +58,7 @@ import { ReviewsModule } from './domains/reviews/reviews.module';
     MapsModule,
     SocketModule,
     ReviewsModule,
+    PaymentsModule,
   ],
   controllers: [AppController],
   providers: [

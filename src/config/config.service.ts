@@ -50,4 +50,17 @@ export class ConfigService {
       private: join(cleanBaseDir, 'private'),
     };
   }
+
+  get PAYMONGO_BASE_API() {
+    return this.configService.get<string>('PAYMONGO_BASE_API');
+  }
+  get PAYMONGO_SECRET_KEY() {
+    return this.configService.get<string>('PAYMONGO_SECRET_KEY');
+  }
+  get PAYMONGO_PUBLIC_KEY() {
+    return this.configService.get<string>('PAYMONGO_PUBLIC_KEY');
+  }
+  get PAYMONGO_WEBHOOK_SECRET() {
+    return this.configService.get<string>('PAYMONGO_WEBHOOK_SECRET');
+  }
 }
