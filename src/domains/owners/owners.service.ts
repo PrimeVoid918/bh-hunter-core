@@ -11,7 +11,13 @@ import { CreateOwnerDto } from './dto/create-owner.dto';
 import { UpdateOwnerDto } from './dto/update-owner.dto';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { FindOwnersDto } from './dto/find-owners.dto';
-import { MediaType, Owner, UserRole, VerificationType } from '@prisma/client';
+import {
+  MediaType,
+  Owner,
+  Prisma,
+  UserRole,
+  VerificationType,
+} from '@prisma/client';
 import { VerifcationService } from '../verifications/verification.service';
 import { CreateVerifcationDto } from 'src/domains/verifications/dto/create-verifcation.dto';
 import { UpdateVerifcationDto } from 'src/domains/verifications/dto/update-verifcation.dto';
@@ -122,32 +128,36 @@ export class OwnersService {
   }
 
   async create(dto: CreateOwnerDto) {
-    const existing = await this.prisma.owner.findFirst({
-      where: {
-        OR: [{ email: dto.email }, { username: dto.username }],
-      },
-    });
+    try {
+      return await this.prisma.owner.create({
+        data: {
+          username: dto.username,
+          firstname: dto.firstname,
+          lastname: dto.lastname,
+          email: dto.email,
+          password: dto.password, // assume already hashed
+          age: dto.age,
+          address: dto.address,
+          phone_number: dto.phone_number,
+        },
+      });
+    } catch (error: unknown) {
+      if (isPrismaErrorCode(error, 'P2002')) {
+        const meta = (error as any)?.meta;
 
-    if (existing?.email === dto.email) {
-      throw new ConflictException('Email is already in use');
+        if (meta?.target?.includes('email')) {
+          throw new ConflictException('Email is already in use');
+        }
+
+        if (meta?.target?.includes('username')) {
+          throw new ConflictException('Username is already in use');
+        }
+
+        throw new ConflictException('Username or Email already exists');
+      }
+
+      throw new InternalServerErrorException('Failed to create owner');
     }
-
-    if (existing?.username === dto.username) {
-      throw new ConflictException('Username is already in use');
-    }
-
-    return this.prisma.owner.create({
-      data: {
-        username: dto.username,
-        firstname: dto.firstname,
-        lastname: dto.lastname,
-        email: dto.email,
-        password: dto.password,
-        age: dto.age,
-        address: dto.address,
-        phone_number: dto.phone_number,
-      },
-    });
   }
 
   async createVerificationDocument(
@@ -162,9 +172,7 @@ export class OwnersService {
 
     const { userId, expiresAt, type, fileFormat } = payload;
     if (!userId) {
-      throw new BadRequestException(
-        'Either ownerId or tenantId must be provided',
-      );
+      throw new BadRequestException('UserId must be provided');
     }
 
     // 🔹 Quick check: does the owner exist?
@@ -229,15 +237,15 @@ export class OwnersService {
         select: { userId: true, userType: true },
       });
 
-    const searchOwner = await prisma.owner.findUnique({
-      where: { id: verificationDocumentOwnerID?.userId },
-    });
-
     if (!verificationDocumentOwnerID) {
       throw new NotFoundException(
         `Verification Document ${verificationDocumentId} not found`,
       );
     }
+
+    const searchOwner = await prisma.owner.findUnique({
+      where: { id: verificationDocumentOwnerID?.userId },
+    });
 
     if (!searchOwner) {
       throw new NotFoundException(
@@ -475,18 +483,19 @@ export class OwnersService {
       return { success: true };
     });
   }
-
   async update(id: number, updateOwnerDto: UpdateOwnerDto) {
     if (!id) throw new BadRequestException('Id is required');
 
-    // Remove undefined fields to avoid Prisma overwriting required fields with undefined
-    const dataToUpdate = Object.fromEntries(
+    // 1️⃣ Filter out undefined fields and remove unwanted relational keys
+    const { boardingHouses, ...dataToUpdate } = Object.fromEntries(
       Object.entries(updateOwnerDto).filter(([_, v]) => v !== undefined),
     );
 
-    const existingOwner = await this.prisma.owner.findUnique({ where: { id } });
-    if (!existingOwner)
-      throw new NotFoundException(`Owner with id ${id} not found`);
+    // 2️⃣ Hash password if included
+    if (dataToUpdate.password) {
+      const bcrypt = await import('bcrypt');
+      dataToUpdate.password = await bcrypt.hash(dataToUpdate.password, 10);
+    }
 
     try {
       const updatedOwner = await this.prisma.owner.update({
@@ -494,13 +503,24 @@ export class OwnersService {
         data: dataToUpdate,
       });
 
-      // Optionally, remove sensitive fields
       const { password, ...safeOwner } = updatedOwner;
       return safeOwner;
-    } catch (error: any) {
-      if (isPrismaErrorCode(error, 'P2002')) {
-        throw new ConflictException('Username or email already exists');
+    } catch (error: unknown) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const meta = error.meta as { target?: string[] } | undefined;
+        if (meta?.target?.includes('email')) {
+          throw new ConflictException('Email is already in use');
+        }
+        if (meta?.target?.includes('username')) {
+          throw new ConflictException('Username is already in use');
+        }
+        throw new ConflictException('Username or Email already exists');
       }
+
+      // this.logger.error('Failed to update owner', error);
       throw new InternalServerErrorException('Failed to update owner');
     }
   }

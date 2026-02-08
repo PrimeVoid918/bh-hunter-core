@@ -71,6 +71,11 @@ export class BookingsService {
       },
     });
 
+    await this.prisma.booking.update({
+      where: { id: bookingResult.id },
+      data: { status: BookingStatus.AWAITING_PAYMENT },
+    });
+
     this.bookingEventPublisher.requested({
       bookingId: bookingResult.id,
       tenantId: bookingResult.tenantId,
@@ -99,11 +104,14 @@ export class BookingsService {
         bookingResult.id,
         err,
       );
-      // optional: update booking status
+
       await this.prisma.booking.update({
         where: { id: bookingResult.id },
         data: { status: BookingStatus.PAYMENT_FAILED },
       });
+
+      // now propagate error so the endpoint returns 500
+      throw err;
     }
 
     return {

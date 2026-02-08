@@ -106,15 +106,15 @@ export class PaymongoService {
           data: {
             attributes: {
               amount: Number(payment.amount) * 100,
-              currency: payment.currency.toLowerCase(),
+              currency: payment.currency,
               payment_method_allowed: ['card'],
               payment_method_options: {
                 card: { request_three_d_secure: 'any' },
               },
               description: `Booking #${payment.bookingId ?? 'N/A'}`,
               metadata: {
-                paymentId: payment.id,
-                bookingId: payment.bookingId,
+                paymentId: String(payment.id),
+                bookingId: String(payment.bookingId ?? ''),
               },
             },
           },

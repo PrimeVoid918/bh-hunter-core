@@ -62,6 +62,9 @@ export class BookingsController {
     return this.paymentsService.retryBookingPayment(+id);
   }
 
+  // GET /api/bookings/:id/payment
+
+
   // @Get(':id/payment-proof')
   // findPaymentProof(@Param('id') id: string) {
   //   return this.bookingsService.findPaymentProof(+id);
