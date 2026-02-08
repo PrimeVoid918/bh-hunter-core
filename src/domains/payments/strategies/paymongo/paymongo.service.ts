@@ -96,25 +96,23 @@ export class PaymongoService {
     };
   }
 
-  async createPaymentIntent(
+  async createPaymentLink(
     payment: Payment,
   ): Promise<{ id: string; checkoutUrl: string }> {
     try {
-      const intentRes = await axios.post<PaymongoPaymentIntentResponse>(
-        `${this.apiBase}/payment_intents`,
+      const res = await axios.post(
+        `${this.apiBase}/payment_links`,
         {
           data: {
             attributes: {
               amount: Number(payment.amount) * 100,
               currency: payment.currency,
-              payment_method_allowed: ['card'],
-              payment_method_options: {
-                card: { request_three_d_secure: 'any' },
-              },
-              description: `Booking #${payment.bookingId ?? 'N/A'}`,
+              description: `Booking #${payment.bookingId}`,
+              remarks: `Payment ${payment.id}`,
               metadata: {
                 paymentId: String(payment.id),
-                bookingId: String(payment.bookingId ?? ''),
+                bookingId: String(payment.bookingId),
+                type: 'booking',
               },
             },
           },
@@ -122,40 +120,27 @@ export class PaymongoService {
         { headers: this.authHeader },
       );
 
-      const intentData = intentRes.data.data;
-
-      const checkoutRes: AxiosResponse<PaymongoPaymentLinkResponse> =
-        await axios.post(
-          `${this.apiBase}/payment_links`,
-          {
-            data: {
-              attributes: {
-                payment_intent: intentData.id,
-                type: 'payment_link',
-                amount: Number(payment.amount) * 100,
-              },
-            },
-          },
-          { headers: this.authHeader },
-        );
-
-      const checkoutUrl: string = checkoutRes.data.data.attributes.url!;
-      return { id: intentData.id, checkoutUrl };
-    } catch (err: unknown) {
+      return {
+        id: res.data.data.id,
+        checkoutUrl: res.data.data.attributes.checkout_url,
+      };
+    } catch (err) {
       if (axios.isAxiosError(err)) {
-        const axiosErr = err as AxiosError;
         console.error(
-          'PayMongo createPaymentIntent error:',
-          axiosErr.response?.data ?? axiosErr.message,
+          'PayMongo createPaymentLink error:',
+          err.response?.data ?? err.message,
         );
-      } else {
-        console.error('PayMongo createPaymentIntent unknown error:', err);
       }
-      throw new InternalServerErrorException('Failed to create payment intent');
+      throw new InternalServerErrorException('Failed to create payment link');
     }
   }
 
   async refundPayment(payment: Payment, reason?: string): Promise<any> {
+    if (!this.apiBase || !this.secretKey) {
+      throw new InternalServerErrorException(
+        'PayMongo API base not configured',
+      );
+    }
     try {
       if (!payment.providerPaymentId) {
         throw new InternalServerErrorException('Payment has no provider ID');

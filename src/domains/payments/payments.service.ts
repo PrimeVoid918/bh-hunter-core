@@ -68,7 +68,7 @@ export class PaymentsService {
     });
 
     // create external payment intent
-    const intent = await this.provider.createPaymentIntent(payment);
+    const intent = await this.provider.createPaymentLink(payment);
 
     // update payment with provider references
     await this.prisma.payment.update({
@@ -235,7 +235,7 @@ export class PaymentsService {
       },
     });
 
-    const intent = await this.provider.createPaymentIntent(newPayment);
+    const intent = await this.provider.createPaymentLink(newPayment);
 
     await this.prisma.payment.update({
       where: { id: newPayment.id },

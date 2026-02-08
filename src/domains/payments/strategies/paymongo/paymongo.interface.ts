@@ -12,7 +12,7 @@ export interface PaymentProviderAdapter {
    * @param payment - Prisma Payment model
    * @returns provider-specific payment intent info
    */
-  createPaymentIntent(payment: Payment): Promise<PaymentIntentResult>;
+  createPaymentLink(payment: Payment): Promise<PaymentIntentResult>;
 
   /**
    * Refund a payment

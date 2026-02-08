@@ -4,15 +4,18 @@ services:
     container_name: nest-app
     ports:
       - "3100:3000"
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgres://mephiscus:devilMayCry5@db:5432/bh
     depends_on:
       - db
     command: ["sh", "-c", "./docker-start.sh"]
-    # command: >
-      # sh -c "./wait-for-db.sh && npx prisma generate && npm run build && node dist/main"
     volumes:
-          - ./media:/app/media
+      - ./media:/app/media
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:3000" ]
