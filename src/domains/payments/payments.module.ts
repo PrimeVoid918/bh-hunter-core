@@ -7,7 +7,14 @@ import { PaymongoService } from './strategies/paymongo/paymongo.service';
 @Module({
   imports: [ConfigModule],
   controllers: [PaymentsController],
-  providers: [PaymentsService, PaymongoService],
+  providers: [
+    PaymentsService,
+    PaymongoService,
+    {
+      provide: 'PAYMENT_PROVIDER',
+      useClass: PaymongoService,
+    },
+  ],
   exports: [PaymentsService],
 })
 export class PaymentsModule {}

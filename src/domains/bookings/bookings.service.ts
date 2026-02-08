@@ -22,12 +22,14 @@ import { ImageService } from 'src/infrastructure/image/image.service';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
 import { UserUnionService } from '../auth/userUnion.service';
 import { BookingEventPublisher } from './events/bookings.publisher';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class BookingsService {
   constructor(
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly userUnionService: UserUnionService,
+    private readonly paymentService: PaymentsService,
     private readonly imageService: ImageService,
     private readonly bookingEventPublisher: BookingEventPublisher,
   ) {}
@@ -39,7 +41,12 @@ export class BookingsService {
   async createBooking(roomId: number, booking: CreateBookingDto) {
     const room = await this.prisma.room.findUnique({
       where: { id: roomId },
-      select: { boardingHouseId: true, boardingHouse: true },
+      select: {
+        boardingHouseId: true,
+        boardingHouse: true,
+        price: true,
+        id: true,
+      },
     });
 
     if (!room) throw new Error(`Room ${roomId} not found`);
@@ -76,7 +83,33 @@ export class BookingsService {
       boardingHouseId: room.boardingHouseId,
     });
 
-    return bookingResult;
+    let payment: {
+      paymentId: number;
+      checkoutUrl: string;
+    } | null = null;
+    try {
+      payment = await this.paymentService.createBookingPayment({
+        bookingId: bookingResult.id,
+        tenantId: bookingResult.tenantId,
+        amount: room.price,
+      });
+    } catch (err) {
+      console.error(
+        'Failed to create payment for booking',
+        bookingResult.id,
+        err,
+      );
+      // optional: update booking status
+      await this.prisma.booking.update({
+        where: { id: bookingResult.id },
+        data: { status: BookingStatus.PAYMENT_FAILED },
+      });
+    }
+
+    return {
+      ...bookingResult,
+      paymentCheckoutUrl: payment?.checkoutUrl,
+    };
   }
 
   findAll(filter: FindAllBookingFilterDto): Promise<Booking[]> {
@@ -147,24 +180,24 @@ export class BookingsService {
     };
   }
 
-  async findPaymentProof(imagId: number) {
-    if (!imagId) throw new BadRequestException('Missing booking id');
+  // async findPaymentProof(imagId: number) {
+  //   if (!imagId) throw new BadRequestException('Missing booking id');
 
-    const bookingReceipt = await this.prisma.image.findUnique({
-      where: { id: imagId },
-    });
+  //   const bookingReceipt = await this.prisma.image.findUnique({
+  //     where: { id: imagId },
+  //   });
 
-    if (!bookingReceipt) throw new NotFoundException('Booking not found');
+  //   if (!bookingReceipt) throw new NotFoundException('Booking not found');
 
-    const { url: rawDBPaymentUrl, ...bookingReceiptData } = bookingReceipt;
+  //   const { url: rawDBPaymentUrl, ...bookingReceiptData } = bookingReceipt;
 
-    const url = await this.imageService.getMediaPath(rawDBPaymentUrl, false);
+  //   const url = await this.imageService.getMediaPath(rawDBPaymentUrl, false);
 
-    return {
-      url,
-      ...bookingReceiptData,
-    };
-  }
+  //   return {
+  //     url,
+  //     ...bookingReceiptData,
+  //   };
+  // }
 
   // TENANT: update or cancel booking (generic)
   async patchBooking(bookId: number, payload: PatchTenantBookDto) {
@@ -281,87 +314,87 @@ export class BookingsService {
     });
   }
 
-  async createPaymentProof(
-    bookId: number,
-    payload: CreatePaymentProofDTO,
-    files: Express.Multer.File[],
-  ) {
-    const { tenantId, note } = payload;
-    console.log('file send:', files);
+  // async createPaymentProof(
+  //   bookId: number,
+  //   payload: CreatePaymentProofDTO,
+  //   files: Express.Multer.File[],
+  // ) {
+  //   const { tenantId, note } = payload;
+  //   console.log('file send:', files);
 
-    // 1️ Verify the booking exists and belongs to the tenant
-    const booking = await this.validateBookingAccess(
-      bookId,
-      tenantId,
-      'TENANT',
-    );
+  //   // 1️ Verify the booking exists and belongs to the tenant
+  //   const booking = await this.validateBookingAccess(
+  //     bookId,
+  //     tenantId,
+  //     'TENANT',
+  //   );
 
-    // 2️ Verify booking status is valid for uploading payment proof
-    if (booking.status !== BookingStatus.AWAITING_PAYMENT) {
-      throw new BadRequestException('This booking is not awaiting payment');
-    }
+  //   // 2️ Verify booking status is valid for uploading payment proof
+  //   if (booking.status !== BookingStatus.AWAITING_PAYMENT) {
+  //     throw new BadRequestException('This booking is not awaiting payment');
+  //   }
 
-    // 3️ Upload the image(s)
-    return this.prisma.$transaction(async (tx) => {
-      const uploadedImageIds = await this.imageService.uploadImagesTransact(
-        tx,
-        files,
-        {
-          type: 'TENANT',
-          targetId: +tenantId,
-          childId: bookId,
-          mediaType: MediaType.PAYMENT,
-        },
-        {
-          resourceId: +tenantId,
-          resourceType: ResourceType.TENANT,
-          mediaType: MediaType.PAYMENT,
-        },
-        {
-          isPublic: false,
-        },
-      );
+  //   // 3️ Upload the image(s)
+  //   return this.prisma.$transaction(async (tx) => {
+  //     const uploadedImageIds = await this.imageService.uploadImagesTransact(
+  //       tx,
+  //       files,
+  //       {
+  //         type: 'TENANT',
+  //         targetId: +tenantId,
+  //         childId: bookId,
+  //         mediaType: MediaType.PAYMENT,
+  //       },
+  //       {
+  //         resourceId: +tenantId,
+  //         resourceType: ResourceType.TENANT,
+  //         mediaType: MediaType.PAYMENT,
+  //       },
+  //       {
+  //         isPublic: false,
+  //       },
+  //     );
 
-      return await tx.booking.update({
-        where: { id: booking.id },
-        data: {
-          paymentProofId: uploadedImageIds[0] ?? null,
-          tenantMessage: note ?? null,
-          status: 'PAYMENT_APPROVAL', // ✅ now waiting for owner to verify
-          updatedAt: new Date(),
-        },
-      });
-    });
-  }
+  //     return await tx.booking.update({
+  //       where: { id: booking.id },
+  //       data: {
+  //         paymentProofId: uploadedImageIds[0] ?? null,
+  //         tenantMessage: note ?? null,
+  //         status: 'PAYMENT_APPROVAL', // ✅ now waiting for owner to verify
+  //         updatedAt: new Date(),
+  //       },
+  //     });
+  //   });
+  // }
 
-  async verifyPayment(bookId: number, payload: PatchVerifyPaymentDto) {
-    const { ownerId, newStatus, remarks } = payload;
+  // async verifyPayment(bookId: number, payload: PatchVerifyPaymentDto) {
+  //   const { ownerId, newStatus, remarks } = payload;
 
-    const booking = await this.validateBookingAccess(bookId, ownerId, 'OWNER');
+  //   const booking = await this.validateBookingAccess(bookId, ownerId, 'OWNER');
 
-    if (!booking) {
-      throw new NotFoundException('Booking not found');
-    }
+  //   if (!booking) {
+  //     throw new NotFoundException('Booking not found');
+  //   }
 
-    if (booking.status !== 'PAYMENT_APPROVAL') {
-      throw new BadRequestException('This booking is not awaiting payment');
-    }
+  //   if (booking.status !== 'PAYMENT_APPROVAL') {
+  //     throw new BadRequestException('This booking is not awaiting payment');
+  //   }
 
-    if (newStatus !== 'COMPLETED_BOOKING' && newStatus !== 'REJECTED_BOOKING') {
-      throw new BadRequestException('Invalid status');
-    }
+  //   if (newStatus !== 'COMPLETED_BOOKING' && newStatus !== 'REJECTED_BOOKING') {
+  //     throw new BadRequestException('Invalid status');
+  //   }
 
-    const updated = await this.prisma.booking.update({
-      where: { id: bookId },
-      data: {
-        status: newStatus ?? booking.status,
-        ownerMessage: remarks ?? booking.ownerMessage,
-        updatedAt: new Date(),
-      },
-    });
+  //   const updated = await this.prisma.booking.update({
+  //     where: { id: bookId },
+  //     data: {
+  //       status: newStatus ?? booking.status,
+  //       ownerMessage: remarks ?? booking.ownerMessage,
+  //       updatedAt: new Date(),
+  //     },
+  //   });
 
-    return updated;
-  }
+  //   return updated;
+  // }
 
   async cancelBooking(bookId: number, payload: CancelBookingDto) {
     const booking = await this.prisma.booking.findUnique({

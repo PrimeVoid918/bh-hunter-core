@@ -25,6 +25,15 @@ import { UpdateVerifcationDto } from 'src/domains/verifications/dto/update-verif
 export class OwnersController {
   constructor(private readonly ownersService: OwnersService) {}
 
+  //  POST /owners/payout-method
+  //  GET  /owners/payout-method
+
+  // if (!owner.hasPayoutMethod) {
+  //   throw new BadRequestException(
+  //     'Owner has no payout method configured'
+  //   );
+  // }
+
   @Get()
   @GetOwnerDoc()
   findAll(@Query() findAllOwnersDto: FindOwnersDto) {

@@ -4,12 +4,7 @@ import { UpdateBoardingHouseDto } from './dto/update-boarding-house.dto';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 
 // TODO: clean this later
-import {
-  BoardingHouse,
-  MediaType,
-  OccupancyType,
-  Prisma,
-} from '@prisma/client';
+import { BoardingHouse, MediaType, Prisma } from '@prisma/client';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
 import { LocationService } from 'src/domains/location/location.service';
 import { LocationDto } from 'src/domains/location/dto/location.dto';
@@ -435,7 +430,6 @@ export class BoardingHousesService {
       data: { isDeleted: true },
     });
   }
-
 
   // TODO: delete images
   // TODO: update images

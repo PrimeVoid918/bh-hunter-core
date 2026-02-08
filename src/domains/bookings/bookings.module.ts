@@ -13,6 +13,8 @@ import { Logger } from 'src/common/logger/logger.service';
 import { DocumentService } from 'src/infrastructure/document/document.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BookingEventPublisher } from './events/bookings.publisher';
+import { PaymentsService } from '../payments/payments.service';
+import { PaymongoService } from '../payments/strategies/paymongo/paymongo.service';
 
 @Module({
   imports: [],
@@ -29,6 +31,11 @@ import { BookingEventPublisher } from './events/bookings.publisher';
     MediaPathBuilderUtil,
     VerifcationService,
     Logger,
+    PaymentsService,
+    {
+      provide: 'PAYMENT_PROVIDER',
+      useClass: PaymongoService,
+    },
     {
       provide: 'BASE_DIR',
       useValue: 'media', // or your base directory path
@@ -36,5 +43,6 @@ import { BookingEventPublisher } from './events/bookings.publisher';
     DocumentService,
     EventEmitter2,
   ],
+  exports: ['PAYMENT_PROVIDER'],
 })
 export class BookingsModule {}

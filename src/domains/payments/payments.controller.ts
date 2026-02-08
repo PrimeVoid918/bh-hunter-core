@@ -1,47 +1,47 @@
 import {
   Controller,
-  Get,
   Post,
   Body,
-  Patch,
-  Param,
-  Delete,
+  Headers,
+  BadRequestException,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
-import { CreatePaymentDto } from './dto/create-payment.dto';
-import { UpdatePaymentDto } from './dto/update-payment.dto';
+import { createHmac } from 'crypto';
+import { ConfigService } from 'src/config/config.service';
 
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
-
-  @Post('create')
-  async create(@Body('amount') amount: number) {
-    return this.paymentsService.createPayment(amount);
+  private readonly paymongoSecret;
+  constructor(
+    private readonly paymentsService: PaymentsService,
+    private readonly configService: ConfigService,
+  ) {
+    this.paymongoSecret = this.configService.PAYMONGO_WEBHOOK_SECRET;
   }
 
-  // @Post()
-  // create(@Body() createPaymentDto: CreatePaymentDto) {
-  //   return this.paymentsService.create(createPaymentDto);
-  // }
+  @Post('webhook/paymongo')
+  async handlePaymongoWebhook(
+    @Body() payload: any,
+    @Headers('paymongo-signature') signature: string,
+  ) {
+    // Verify signature first
+    const verified = this.verifyPaymongoSignature(payload, signature);
+    if (!verified) {
+      throw new BadRequestException('Invalid PayMongo webhook signature');
+    }
 
-  @Get()
-  findAll() {
-    return this.paymentsService.findAll();
+    return this.paymentsService.handlePaymongoWebhook(payload);
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.paymentsService.findOne(+id);
-  }
+  private verifyPaymongoSignature(payload: any, signature: string): boolean {
+    if (!this.paymongoSecret)
+      throw new Error('PAYMONGO_WEBHOOK_SECRET not set in .env');
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updatePaymentDto: UpdatePaymentDto) {
-    return this.paymentsService.update(+id, updatePaymentDto);
-  }
+    const payloadString = JSON.stringify(payload);
+    const hmac = createHmac('sha256', this.paymongoSecret as string);
+    hmac.update(payloadString, 'utf8');
+    const expectedSignature = hmac.digest('hex');
 
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.paymentsService.remove(+id);
+    return expectedSignature === signature;
   }
 }

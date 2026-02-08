@@ -40,6 +40,7 @@ enum BookingStatus {
   CANCELLED_BOOKING //🔴
   REJECTED_BOOKING //🔴
   COMPLETED_BOOKING //🟢
+  PAYMENT_FAILED
 }
 
 enum BookingType {
@@ -48,6 +49,43 @@ enum BookingType {
   HOLD // short hold (non-committal)
   LONG_TERM // monthly leases
   SHORT_TERM // days/weeks
+}
+
+enum PaymentProvider {
+  PAYMONGO
+}
+
+enum PaymentStatus {
+  PENDING
+  REQUIRES_ACTION
+  PAID
+  FAILED
+  CANCELLED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+}
+
+enum PurchaseType {
+  ROOM_BOOKING
+  SUBSCRIPTION
+  DEPOSIT
+}
+
+enum PayoutStatus {
+  PENDING
+  PAID_OUT
+  FAILED
+}
+
+enum PayoutType {
+  GCASH
 }
 
 enum CurrencyType {
@@ -70,6 +108,7 @@ enum ResourceType {
   BOARDING_HOUSE
   ROOM
   BOOKING
+  SUBSCRIPTION
 }
 
 enum RoomType {
@@ -178,6 +217,20 @@ model Owner {
   verificationDocuments        VerificationDocument[] // permit relation
 }
 
+model OwnerPayoutMethod {
+  id      Int @id @default(autoincrement())
+  ownerId Int @unique
+
+  type          PayoutType @default(GCASH)
+  accountName   String
+  accountNumber String
+
+  isVerified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model Admin {
   id                    Int                    @id @default(autoincrement())
   username              String                 @unique
@@ -268,6 +321,80 @@ model Booking {
   updatedAt       DateTime      @updatedAt
   isDeleted       Boolean       @default(false)
   deletedAt       DateTime?
+  payments        Payment[]
+  paymentId       Int?
+}
+
+model Payment {
+  id Int @id @default(autoincrement())
+
+  provider PaymentProvider @default(PAYMONGO)
+
+  // External references (PayMongo)
+  providerPaymentId String? @unique
+  providerIntentId  String?
+  providerSourceId  String?
+
+  amount   Decimal      @db.Decimal(10, 2)
+  currency CurrencyType @default(PHP)
+
+  status       PaymentStatus @default(PENDING)
+  purchaseType PurchaseType
+
+  userId   Int
+  userType ResourceType
+
+  ownerId Int
+
+  bookingId Int?
+  booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  subscriptionId Int?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  payouts   Payout[]
+}
+
+model Payout {
+  id      Int @id @default(autoincrement())
+  ownerId Int
+
+  amount   Decimal
+  currency CurrencyType @default(PHP)
+
+  status PayoutStatus @default(PENDING)
+
+  paymentId Int
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  createdAt DateTime  @default(now())
+  paidAt    DateTime?
+}
+
+model Subscription {
+  id Int @id @default(autoincrement())
+
+  userId   Int
+  userType ResourceType
+
+  provider               PaymentProvider @default(PAYMONGO)
+  providerSubscriptionId String          @unique
+
+  status SubscriptionStatus @default(INACTIVE)
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+
+  metadata Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments Payment[]
 }
 
 model Room {
