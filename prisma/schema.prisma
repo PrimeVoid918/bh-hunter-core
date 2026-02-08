@@ -331,9 +331,10 @@ model Payment {
   provider PaymentProvider @default(PAYMONGO)
 
   // External references (PayMongo)
-  providerPaymentId String? @unique
-  providerIntentId  String?
-  providerSourceId  String?
+  providerPaymentLinkId   String? @unique
+  providerPaymentIntentId String? @unique
+  providerPaymentId       String? @unique
+  providerSourceId        String?
 
   amount   Decimal      @db.Decimal(10, 2)
   currency CurrencyType @default(PHP)

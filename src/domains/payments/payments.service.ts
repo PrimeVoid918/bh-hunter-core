@@ -13,6 +13,7 @@ import {
   PurchaseType,
   ResourceType,
   PayoutStatus,
+  Payment,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PaymongoWebhookPayload } from './dto/types';
@@ -84,29 +85,25 @@ export class PaymentsService {
 
   /** Handle webhook from PayMongo to confirm payment */
   async confirmPayment(input: ConfirmPaymentInput) {
-    const payment = await this.prisma.payment.findUnique({
-      where: { providerPaymentId: input.providerPaymentId },
+    const payment = await this.prisma.payment.findFirst({
+      where: { providerIntentId: input.providerPaymentId },
     });
 
-    if (!payment) throw new NotFoundException('Payment not found');
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
 
-    const updated = await this.prisma.payment.update({
+    if (payment.status === PaymentStatus.PAID) {
+      return payment;
+    }
+
+    return this.prisma.payment.update({
       where: { id: payment.id },
       data: {
         status: input.status,
         metadata: input.metadata ?? payment.metadata ?? {},
       },
     });
-
-    // if PAID, update Booking status
-    if (input.status === PaymentStatus.PAID && payment.bookingId) {
-      await this.prisma.booking.update({
-        where: { id: payment.bookingId },
-        data: { status: 'COMPLETED_BOOKING' },
-      });
-    }
-
-    return updated;
   }
 
   /** Create a payout for the owner */
@@ -266,42 +263,77 @@ export class PaymentsService {
   ==============
   */
   async handlePaymongoWebhook(payload: PaymongoWebhookPayload) {
-    const eventType = payload.data.attributes.event_type;
+    const eventType = payload?.data?.attributes?.event_type;
+    const intent =
+      typeof payload.data.attributes.payment_intent === 'string'
+        ? payload.data.attributes.payment_intent
+        : payload.data.attributes.payment_intent?.id;
 
-    const paymentIntentAttr = payload.data.attributes.payment_intent;
-
-    const paymentIntentId =
-      typeof paymentIntentAttr === 'string'
-        ? paymentIntentAttr
-        : paymentIntentAttr.id;
-
-    if (!paymentIntentId) {
+    if (!intent) {
       throw new BadRequestException('Missing payment intent id');
     }
 
     const payment = await this.prisma.payment.findFirst({
-      where: { providerIntentId: paymentIntentId },
+      where: { providerIntentId: intent },
     });
 
     if (!payment) {
-      throw new NotFoundException('Payment not found for webhook');
+      return { ignored: true };
+    }
+
+    // Idempotency guard
+    if (payment.status === PaymentStatus.PAID) {
+      return { ignored: true };
     }
 
     switch (eventType) {
       case 'payment_intent.succeeded':
-        return this.confirmPayment({
-          providerPaymentId: paymentIntentId,
-          status: PaymentStatus.PAID,
-        });
+        return this.markPaymentPaid(payment);
 
       case 'payment_intent.payment_failed':
-        return this.confirmPayment({
-          providerPaymentId: paymentIntentId,
-          status: PaymentStatus.FAILED,
-        });
+        return this.markPaymentFailed(payment);
 
       default:
         return { ignored: true };
     }
+  }
+
+  private async markPaymentPaid(payment: Payment) {
+    if (
+      ![PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION].includes(
+        payment.status as 'PENDING' | 'REQUIRES_ACTION',
+      )
+    ) {
+      return { ignored: true };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.PAID },
+      });
+
+      if (payment.bookingId) {
+        await tx.booking.update({
+          where: { id: payment.bookingId },
+          data: { status: 'COMPLETED_BOOKING' },
+        });
+      }
+    });
+
+    return { success: true };
+  }
+
+  private async markPaymentFailed(payment: Payment) {
+    if (payment.status === PaymentStatus.PAID) {
+      return { ignored: true };
+    }
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: PaymentStatus.FAILED },
+    });
+
+    return { success: true };
   }
 }
