@@ -130,7 +130,7 @@ export class PaymongoService {
       );
     }
     try {
-      if (!payment.providerIntentId) {
+      if (!payment.providerPaymentIntentId) {
         throw new InternalServerErrorException('Payment has no provider ID');
       }
 
@@ -139,7 +139,7 @@ export class PaymongoService {
         {
           data: {
             attributes: {
-              payment_intent: payment.providerIntentId,
+              payment_intent: payment.providerPaymentIntentId,
               amount: Number(payment.amount) * 100,
               reason: reason ?? 'Customer request',
             },

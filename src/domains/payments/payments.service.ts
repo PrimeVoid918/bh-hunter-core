@@ -75,7 +75,7 @@ export class PaymentsService {
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: {
-        providerIntentId: intent.id,
+        providerPaymentIntentId: intent.id,
         status: PaymentStatus.REQUIRES_ACTION,
       },
     });
@@ -86,7 +86,7 @@ export class PaymentsService {
   /** Handle webhook from PayMongo to confirm payment */
   async confirmPayment(input: ConfirmPaymentInput) {
     const payment = await this.prisma.payment.findFirst({
-      where: { providerIntentId: input.providerPaymentId },
+      where: { providerPaymentIntentId: input.providerPaymentId },
     });
 
     if (!payment) {
@@ -179,7 +179,7 @@ export class PaymentsService {
     return {
       paymentId: payment.id,
       status: payment.status,
-      providerIntentId: payment.providerIntentId,
+      providerPaymentIntentId: payment.providerPaymentIntentId,
       canRetry: !this.isPayableStatus(payment.status),
     };
   }
@@ -237,7 +237,7 @@ export class PaymentsService {
     await this.prisma.payment.update({
       where: { id: newPayment.id },
       data: {
-        providerIntentId: intent.id,
+        providerPaymentIntentId: intent.id,
         status: PaymentStatus.REQUIRES_ACTION,
       },
     });
@@ -274,7 +274,7 @@ export class PaymentsService {
     }
 
     const payment = await this.prisma.payment.findFirst({
-      where: { providerIntentId: intent },
+      where: { providerPaymentIntentId: intent },
     });
 
     if (!payment) {
