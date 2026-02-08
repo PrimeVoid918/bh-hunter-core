@@ -21,11 +21,11 @@ export class CreateOwnerDto {
 
   @IsOptional()
   @IsString()
-  firstname!: string;
+  firstname?: string;
 
   @IsOptional()
   @IsString()
-  lastname!: string;
+  lastname?: string;
 
   @IsOptional()
   @IsNumber()

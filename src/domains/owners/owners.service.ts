@@ -76,6 +76,10 @@ export class OwnersService {
   }
 
   findOne(id: number) {
+    if (!id) {
+      throw new BadRequestException('Id is required');
+    }
+
     const prisma = this.prisma;
     return prisma.owner.findUnique({
       where: {
@@ -111,6 +115,10 @@ export class OwnersService {
 
   findUserByUsername(username: string) {
     const prisma = this.prisma;
+
+    if (!username) {
+      throw new BadRequestException('Username is required');
+    }
     return prisma.owner.findUnique({
       where: {
         username: username,
@@ -120,6 +128,9 @@ export class OwnersService {
 
   findUserById(userId: number) {
     const prisma = this.prisma;
+    if (!userId) {
+      throw new BadRequestException('Id is required');
+    }
     return prisma.owner.findUnique({
       where: {
         id: userId,
@@ -128,6 +139,7 @@ export class OwnersService {
   }
 
   async create(dto: CreateOwnerDto) {
+    // const hashedPassword = await bcrypt.hash(dto.password, 10);
     try {
       return await this.prisma.owner.create({
         data: {

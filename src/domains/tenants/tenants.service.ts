@@ -144,31 +144,11 @@ export class TenantsService {
   }
 
   async create(dto: CreateTenantDto) {
-    const prisma = this.prisma;
-
-    if (hasNullOrUndefinedDeep(dto)) {
-      throw new BadRequestException(
-        'Payload contains undefined or null values',
-      );
-    }
-
     try {
-      // 1. Check if email or username already exists
-      const existingTenant = await prisma.tenant.findFirst({
-        where: {
-          OR: [{ email: dto.email }, { username: dto.username }],
-        },
-      });
-
-      if (existingTenant) {
-        throw new ConflictException('Email or username already exists');
-      }
-
-      // 2. Hash the password
+      const prisma = this.prisma;
       // const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-      // 3. Create the tenant
-      const tenant = await prisma.tenant.create({
+      return await prisma.tenant.create({
         data: {
           username: dto.username,
           firstname: dto.firstname,
@@ -181,22 +161,25 @@ export class TenantsService {
           phone_number: dto.phone_number,
         },
       });
-
-      // 4. Return safe data (exclude password)
-      const { password, ...safeTenant } = tenant;
-      return {
-        status: 'success',
-        message: 'Tenant created successfully',
-        data: safeTenant,
-      };
     } catch (error) {
-      console.error('Tenant creation error:', error);
-      if (error instanceof ConflictException) {
-        throw error;
+      if (isPrismaErrorCode(error, 'P2002')) {
+        const meta = (error as any)?.meta;
+
+        if (meta?.target?.includes('email')) {
+          throw new ConflictException('Email is already in use');
+        }
+
+        if (meta?.target?.includes('username')) {
+          throw new ConflictException('Username is already in use');
+        }
+
+        throw new ConflictException('Username or Email already exists');
       }
-      throw new InternalServerErrorException('Failed to create tenant');
+
+      throw new InternalServerErrorException('Failed to create owner');
     }
   }
+
   async update(id: number, updateTenantDto: UpdateTenantDto) {
     if (!id) throw new BadRequestException('Id is required');
 
