@@ -3,7 +3,8 @@ import { Payment, PaymentStatus } from '@prisma/client';
 
 export interface PaymentIntentResult {
   id: string; // provider's payment intent ID
-  checkoutUrl: string; // URL for frontend checkout
+  checkoutUrl?: string; // optional, only for payment links
+  clientSecret?: string; // optional, only for payment intents
 }
 
 export interface PaymentProviderAdapter {
@@ -13,6 +14,8 @@ export interface PaymentProviderAdapter {
    * @returns provider-specific payment intent info
    */
   createPaymentLink(payment: Payment): Promise<PaymentIntentResult>;
+
+  createPaymentIntent(payment: Payment): Promise<PaymentIntentResult>;
 
   /**
    * Refund a payment

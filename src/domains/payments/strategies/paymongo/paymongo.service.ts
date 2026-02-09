@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import axios, { AxiosError, AxiosResponse } from 'axios';
-import { Payment } from '@prisma/client';
+import { Payment, PaymentStatus } from '@prisma/client';
 import { ConfigService } from 'src/config/config.service';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 
@@ -65,6 +65,24 @@ type PaymentMetadata = {
   [key: string]: any;
 };
 
+interface PaymongoPaymentLinkAttributes {
+  payment_intent: string;
+  type: string;
+  amount: number;
+  url?: string;
+  checkout_url: string;
+}
+
+interface PaymongoPaymentLinkData {
+  id: string;
+  type: string;
+  attributes: PaymongoPaymentLinkAttributes;
+}
+
+interface PaymongoPaymentLinkResponse {
+  data: PaymongoPaymentLinkData;
+}
+
 // ====== Service ======
 @Injectable()
 export class PaymongoService {
@@ -97,29 +115,42 @@ export class PaymongoService {
   }
 
   async createPaymentLink(payment: Payment) {
-    const res = await axios.post(
-      `${this.apiBase}/payment_links`,
-      {
-        data: {
-          attributes: {
-            amount: Number(payment.amount) * 100,
-            currency: payment.currency,
-            description: `Booking #${payment.bookingId}`,
-            remarks: `Payment ${payment.id}`,
-            metadata: {
-              paymentId: payment.id,
-              bookingId: payment.bookingId,
-              type: 'booking',
+    const sessionPayload = {
+      data: {
+        attributes: {
+          payment_method_types: ['gcash', 'paymaya', 'card', 'grab_pay'], // More options for tenants!
+          line_items: [
+            {
+              amount: Math.round(Number(payment.amount) * 100),
+              currency: payment.currency,
+              name: `Booking #${payment.bookingId}`,
+              quantity: 1,
             },
+          ],
+          description: `Booking payment for room`,
+          metadata: {
+            paymentId: String(payment.id),
+            bookingId: String(payment.bookingId),
           },
+          // Optional: Redirect them back to your app/site after success
         },
       },
+    };
+
+    const res = await axios.post(
+      `${this.apiBase}/checkout_sessions`,
+      sessionPayload,
       { headers: this.authHeader },
     );
 
+    const sessionData = res.data.data;
+
+    // This is the "Magic" URL you need
+    const checkoutUrl = sessionData.attributes.checkout_url;
+
     return {
-      id: res.data.data.id,
-      checkoutUrl: res.data.data.attributes.checkout_url,
+      id: sessionData.id, // cs_test_...
+      checkoutUrl, // https://checkout.paymongo.com/cs_test_...
     };
   }
 
@@ -130,8 +161,13 @@ export class PaymongoService {
       );
     }
     try {
-      if (!payment.providerPaymentIntentId) {
+      if (!payment.providerPaymentId) {
         throw new InternalServerErrorException('Payment has no provider ID');
+      }
+      if (!payment.providerPaymentIntentId) {
+        throw new InternalServerErrorException(
+          'Payment has no provider payment intent ID',
+        );
       }
 
       const refundRes: AxiosResponse<any> = await axios.post(
@@ -163,124 +199,123 @@ export class PaymongoService {
     }
   }
 
-  // async handlePaymongoWebhook(payload: any): Promise<{
-  //   success?: boolean;
-  //   ignored?: boolean;
-  //   eventType?: string;
-  //   paymentId?: number;
-  // }> {
-  //   const eventType: string = payload?.data?.attributes?.event_type;
+  /**
+   * Create a Payment Intent (checkout session) for in-app RN payment
+   */
+  async createPaymentIntent(
+    payment: Payment,
+  ): Promise<{ id: string; clientSecret: string }> {
+    try {
+      const payload = {
+        data: {
+          attributes: {
+            amount: Number(payment.amount) * 100, // PayMongo expects cents
+            currency: payment.currency,
+            payment_method_allowed: ['card'], // only cards for now
+            payment_method_options: { card: { request_three_d_secure: 'any' } },
+            description: `Booking #${payment.bookingId}`,
+            metadata: {
+              paymentId: String(payment.id),
+              bookingId: String(payment.bookingId),
+              type: 'booking',
+            },
+          },
+        },
+      };
 
-  //   let payment: Payment | null = null;
+      const res = await axios.post(`${this.apiBase}/payment_intents`, payload, {
+        headers: this.authHeader,
+      });
 
-  //   // ---- BOOKING PAYMENT (PaymentIntent) ----
-  //   if (payload?.data?.attributes?.payment_intent) {
-  //     const providerIntentId: string = payload.data.attributes.payment_intent;
+      return {
+        id: res.data.data.id,
+        clientSecret: res.data.data.attributes.client_secret,
+      };
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        console.error(
+          'PayMongo createPaymentIntent error:',
+          err.response?.data ?? err.message,
+        );
+      } else {
+        console.error('Unknown error creating payment intent:', err);
+      }
+      throw new InternalServerErrorException('Failed to create payment intent');
+    }
+  }
 
-  //     payment = await this.prisma.payment.findFirst({
-  //       where: { providerIntentId },
-  //     });
+  // async handlePaymongoWebhook(payload: PaymongoWebhookPayload) {
+  //   const eventType = payload?.data?.attributes?.event_type;
+  //   const intent =
+  //     typeof payload.data.attributes.payment_intent === 'string'
+  //       ? payload.data.attributes.payment_intent
+  //       : payload.data.attributes.payment_intent?.id;
+
+  //   if (!intent) {
+  //     throw new BadRequestException('Missing payment intent id');
   //   }
 
-  //   // ---- SUBSCRIPTION PAYMENT (Invoice) ----
-  //   else if (payload?.data?.attributes?.subscription) {
-  //     const subscriptionId = Number(payload.data.attributes.subscription);
-
-  //     payment = await this.prisma.payment.findFirst({
-  //       where: { subscriptionId },
-  //     });
-  //   }
+  //   const payment = await this.prisma.payment.findFirst({
+  //     where: { providerIntentId: intent },
+  //   });
 
   //   if (!payment) {
-  //     console.warn(
-  //       'Webhook received for unknown payment/subscription',
-  //       payload,
-  //     );
   //     return { ignored: true };
   //   }
 
-  //   // ---- FIX: CAST METADATA ----
-  //   const metadata = (payment.metadata || {}) as PaymentMetadata;
-  //   const type: 'booking' | 'subscription' = metadata.type || 'booking';
-
-  //   switch (eventType) {
-  //     case 'payment.paid':
-  //     case 'payment_intent.succeeded':
-  //       if (type === 'booking' && payment.bookingId) {
-  //         await this.prisma.payment.update({
-  //           where: { id: payment.id },
-  //           data: { status: 'PAID' },
-  //         });
-
-  //         await this.prisma.booking.update({
-  //           where: { id: payment.bookingId },
-  //           data: { status: 'COMPLETED_BOOKING' },
-  //         });
-
-  //         console.log(`Booking payment completed: ${payment.id}`);
-  //       } else if (type === 'subscription' && payment.subscriptionId) {
-  //         await this.prisma.subscription.update({
-  //           where: { id: payment.subscriptionId },
-  //           data: { status: 'ACTIVE' },
-  //         });
-
-  //         console.log(
-  //           `Subscription payment completed: ${payment.subscriptionId}`,
-  //         );
-  //       }
-  //       break;
-
-  //     case 'payment.failed':
-  //     case 'payment_intent.payment_failed':
-  //       if (type === 'booking' && payment.bookingId) {
-  //         await this.prisma.payment.update({
-  //           where: { id: payment.id },
-  //           data: { status: 'FAILED' },
-  //         });
-
-  //         await this.prisma.booking.update({
-  //           where: { id: payment.bookingId },
-  //           data: { status: 'PAYMENT_FAILED' },
-  //         });
-
-  //         console.log(`Booking payment failed: ${payment.id}`);
-  //       } else if (type === 'subscription' && payment.subscriptionId) {
-  //         await this.prisma.subscription.update({
-  //           where: { id: payment.subscriptionId },
-  //           data: { status: 'PAST_DUE' },
-  //         });
-
-  //         console.log(`Subscription payment failed: ${payment.subscriptionId}`);
-  //       }
-  //       break;
-
-  //     case 'subscription.invoice.paid':
-  //       if (type === 'subscription' && payment.subscriptionId) {
-  //         await this.prisma.subscription.update({
-  //           where: { id: payment.subscriptionId },
-  //           data: { status: 'ACTIVE' },
-  //         });
-
-  //         console.log(`Subscription invoice paid: ${payment.subscriptionId}`);
-  //       }
-  //       break;
-
-  //     case 'subscription.invoice.payment_failed':
-  //       if (type === 'subscription' && payment.subscriptionId) {
-  //         await this.prisma.subscription.update({
-  //           where: { id: payment.subscriptionId },
-  //           data: { status: 'PAST_DUE' },
-  //         });
-
-  //         console.log(`Subscription invoice failed: ${payment.subscriptionId}`);
-  //       }
-  //       break;
-
-  //     default:
-  //       console.log('Webhook event ignored:', eventType);
-  //       return { ignored: true };
+  //   // Idempotency guard
+  //   if (payment.status === PaymentStatus.PAID) {
+  //     return { ignored: true };
   //   }
 
-  //   return { success: true, eventType, paymentId: payment.id };
+  //   switch (eventType) {
+  //     case 'payment_intent.succeeded':
+  //       return this.markPaymentPaid(payment);
+
+  //     case 'payment_intent.payment_failed':
+  //       return this.markPaymentFailed(payment);
+
+  //     default:
+  //       return { ignored: true };
+  //   }
   // }
+
+  private async markPaymentPaid(payment: Payment) {
+    if (
+      ![PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION].includes(
+        payment.status as 'PENDING' | 'REQUIRES_ACTION',
+      )
+    ) {
+      return { ignored: true };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.PAID },
+      });
+
+      if (payment.bookingId) {
+        await tx.booking.update({
+          where: { id: payment.bookingId },
+          data: { status: 'COMPLETED_BOOKING' },
+        });
+      }
+    });
+
+    return { success: true };
+  }
+
+  private async markPaymentFailed(payment: Payment) {
+    if (payment.status === PaymentStatus.PAID) {
+      return { ignored: true };
+    }
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: { status: PaymentStatus.FAILED },
+    });
+
+    return { success: true };
+  }
 }

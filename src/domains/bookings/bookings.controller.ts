@@ -32,25 +32,10 @@ export class BookingsController {
     private readonly paymentsService: PaymentsService,
   ) {}
 
-  /*
-  =====================
-  CREATE
-  =====================
-  */
-
-  @Post(':roomId')
-  async createBooking(
-    @Param('roomId') roomId: string,
-    @Body() payload: CreateBookingDto,
-  ) {
-    return this.bookingsService.createBooking(+roomId, payload);
+  @Post(':id/paymongo')
+  createPaymongoPayment(@Param('id') id: string) {
+    return this.paymentsService.createBookingPaymentForFrontend(+id);
   }
-
-  /*
-  =====================
-  PAYMENT RELATED (SPECIFIC FIRST)
-  =====================
-  */
 
   @Get(':id/payment')
   getBookingPayment(@Param('id') id: string) {
@@ -61,34 +46,6 @@ export class BookingsController {
   retryBookingPayment(@Param('id') id: string) {
     return this.paymentsService.retryBookingPayment(+id);
   }
-
-  // GET /api/bookings/:id/payment
-
-
-  // @Get(':id/payment-proof')
-  // findPaymentProof(@Param('id') id: string) {
-  //   return this.bookingsService.findPaymentProof(+id);
-  // }
-
-  // @Post(':id/payment-proof')
-  // @UseInterceptors(AnyFilesInterceptor(createMulterConfig('image')))
-  // createPaymentProof(
-  //   @Param('id') id: string,
-  //   @Body() payload: Record<string, string>,
-  //   @UploadedFiles() files: Express.Multer.File[],
-  // ) {
-  //   const createPaymentProof: CreatePaymentProofDTO = {
-  //     ...payload,
-  //     tenantId: +payload.tenantId,
-  //     ownerId: +payload.ownerId,
-  //   };
-
-  //   return this.bookingsService.createPaymentProof(
-  //     +id,
-  //     createPaymentProof,
-  //     files,
-  //   );
-  // }
 
   /*
   =====================
@@ -112,14 +69,6 @@ export class BookingsController {
     return this.bookingsService.patchRejectBooking(+id, payload);
   }
 
-  // @Patch(':id/owner/verify-payment')
-  // patchPaymentStatus(
-  //   @Param('id') id: string,
-  //   @Body() payload: PatchVerifyPaymentDto,
-  // ) {
-  //   return this.bookingsService.verifyPayment(+id, payload);
-  // }
-
   /*
   =====================
   TENANT ACTIONS
@@ -141,6 +90,14 @@ export class BookingsController {
   GENERIC GET
   =====================
   */
+
+  @Post(':roomId')
+  async createBooking(
+    @Param('roomId') roomId: string,
+    @Body() payload: CreateBookingDto,
+  ) {
+    return this.bookingsService.createBooking(+roomId, payload);
+  }
 
   @Get(':id')
   findOne(@Param('id') id: string) {

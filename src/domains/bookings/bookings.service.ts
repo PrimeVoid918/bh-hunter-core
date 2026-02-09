@@ -88,10 +88,7 @@ export class BookingsService {
       boardingHouseId: room.boardingHouseId,
     });
 
-    let payment: {
-      paymentId: number;
-      checkoutUrl: string;
-    } | null = null;
+    let payment: { paymentId: number; clientSecret: string } | null = null;
     try {
       payment = await this.paymentService.createBookingPayment({
         bookingId: bookingResult.id,
@@ -104,23 +101,20 @@ export class BookingsService {
         bookingResult.id,
         err,
       );
-
       await this.prisma.booking.update({
         where: { id: bookingResult.id },
         data: { status: BookingStatus.PAYMENT_FAILED },
       });
-
-      // now propagate error so the endpoint returns 500
       throw err;
     }
 
     return {
       ...bookingResult,
-      paymentCheckoutUrl: payment?.checkoutUrl,
+      paymentClientSecret: payment?.clientSecret,
     };
   }
 
-  findAll(filter: FindAllBookingFilterDto): Promise<Booking[]> {
+  async findAll(filter: FindAllBookingFilterDto) {
     const {
       tenantId,
       boardingHouseId,
@@ -143,7 +137,7 @@ export class BookingsService {
 
     console.log('where: ', where);
 
-    return this.prisma.booking.findMany({
+    const bookings = await this.prisma.booking.findMany({
       skip: toSkip,
       take: Number(limit),
       where,
@@ -162,13 +156,46 @@ export class BookingsService {
         room: {
           select: {
             roomNumber: true,
+            //!
+            availabilityStatus: true,
+            price: true,
           },
         },
       },
     });
+
+    const bookingsWithRoomThumbnail = await Promise.all(
+      bookings.map(async (book) => {
+        const { room, ...bookData } = book;
+
+        const images = await this.prisma.image.findMany({
+          where: {
+            entityType: ResourceType.ROOM,
+            entityId: { in: [book.roomId] },
+          },
+        });
+        const { thumbnail } = await this.imageService.getImageMetaData(
+          images,
+          (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
+          ResourceType.ROOM,
+          book.roomId,
+          [MediaType.THUMBNAIL],
+        );
+        // const roomImages = images.filter()
+        return { ...bookData, room: { ...room, thumbnail } };
+      }),
+    );
+
+    // console.log('bookingsWithRoomThumbnail: ', bookingsWithRoomThumbnail);
+
+    return bookingsWithRoomThumbnail;
   }
 
   async findOne(bookId: number) {
+    if (!bookId) {
+      throw new BadRequestException('no book id provided');
+    }
+
     const booking = await this.prisma.booking.findUnique({
       where: {
         id: bookId,

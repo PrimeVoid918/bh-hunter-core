@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
@@ -45,15 +46,19 @@ export class PaymentsService {
 
   /** Create payment for a booking */
   async createBookingPayment(input: CreateBookingPaymentInput) {
+    // Fetch booking
     const booking = await this.prisma.booking.findUnique({
       where: { id: input.bookingId },
-      include: { tenant: true, room: { include: { boardingHouse: true } } },
+      include: {
+        tenant: true,
+        room: { include: { boardingHouse: true } },
+      },
     });
-
     if (!booking) throw new NotFoundException('Booking not found');
     if (booking.status !== 'AWAITING_PAYMENT')
       throw new BadRequestException('Booking is not awaiting payment');
 
+    // Create payment record
     const payment = await this.prisma.payment.create({
       data: {
         userId: booking.tenantId,
@@ -68,19 +73,75 @@ export class PaymentsService {
       },
     });
 
-    // create external payment intent
-    const intent = await this.provider.createPaymentLink(payment);
+    // ✅ CHANGED: Use Payment Intent (checkout session) instead of payment link
+    const intent = await this.provider.createPaymentIntent(payment);
 
-    // update payment with provider references
+    // Update payment with provider info
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: {
-        providerPaymentLinkId: intent.id, //!
+        providerPaymentIntentId: intent.id,
         status: PaymentStatus.REQUIRES_ACTION,
       },
     });
 
-    return { paymentId: payment.id, checkoutUrl: intent.checkoutUrl };
+    // Return client secret for RN app to confirm payment in-app
+    return {
+      paymentId: payment.id,
+      clientSecret: intent.clientSecret!,
+    };
+  }
+
+  async createBookingPaymentForFrontend(bookingId: number) {
+    // Fetch booking
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { room: { include: { boardingHouse: true } } },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.status !== 'AWAITING_PAYMENT')
+      throw new BadRequestException('Booking is not awaiting payment');
+
+    // Check if a payment already exists
+    let latestPayment = await this.prisma.payment.findFirst({
+      where: { bookingId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // If no payment yet, create one
+    if (!latestPayment) {
+      latestPayment = await this.prisma.payment.create({
+        data: {
+          userId: booking.tenantId,
+          userType: ResourceType.TENANT,
+          ownerId: booking.room.boardingHouse.ownerId,
+          amount: booking.room.price,
+          currency: CurrencyType.PHP,
+          purchaseType: PurchaseType.ROOM_BOOKING,
+          status: PaymentStatus.PENDING,
+          bookingId: booking.id,
+          provider: PaymentProvider.PAYMONGO,
+        },
+      });
+    }
+
+    // Create the PayMongo payment link
+    const link = await this.provider.createPaymentLink(latestPayment);
+
+    // Update payment with provider link ID
+    await this.prisma.payment.update({
+      where: { id: latestPayment.id },
+      data: {
+        providerPaymentLinkId: link.id,
+        status: PaymentStatus.REQUIRES_ACTION,
+      },
+    });
+
+    return {
+      paymentId: latestPayment.id,
+      checkoutUrl: link.checkoutUrl,
+    };
   }
 
   /** Handle webhook from PayMongo to confirm payment */
@@ -176,48 +237,48 @@ export class PaymentsService {
       throw new NotFoundException('No payment found for booking');
     }
 
+    if (!payment.providerPaymentIntentId) {
+      throw new InternalServerErrorException(
+        'Payment does not have a provider payment intent yet',
+      );
+    }
+
     return {
       paymentId: payment.id,
       status: payment.status,
-      providerPaymentIntentId: payment.providerPaymentIntentId,
+      providerPaymentIntentId: payment.providerPaymentIntentId, // now TS knows it's string
       canRetry: !this.isPayableStatus(payment.status),
     };
+
+    // return {
+    //   paymentId: payment.id,
+    //   status: payment.status,
+    //   providerPaymentIntentId: payment.providerPaymentIntentId,
+    //   canRetry: !this.isPayableStatus(payment.status),
+    // };
   }
 
   async retryBookingPayment(bookingId: number) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
-      include: {
-        room: {
-          include: {
-            boardingHouse: true,
-          },
-        },
-      },
+      include: { room: { include: { boardingHouse: true } } },
     });
-
     if (!booking) throw new NotFoundException('Booking not found');
-
-    if (booking.status !== 'AWAITING_PAYMENT') {
+    if (booking.status !== 'AWAITING_PAYMENT')
       throw new BadRequestException('Booking is not awaiting payment');
-    }
 
     const latestPayment = await this.prisma.payment.findFirst({
       where: { bookingId },
       orderBy: { createdAt: 'desc' },
     });
-
-    if (!latestPayment) {
+    if (!latestPayment)
       throw new NotFoundException('No previous payment found');
-    }
 
-    if (this.isPayableStatus(latestPayment.status)) {
+    if (this.isPayableStatus(latestPayment.status))
       throw new BadRequestException(
         'Payment is still payable, no retry needed',
       );
-    }
 
-    // CREATE NEW PAYMENT RECORD
     const newPayment = await this.prisma.payment.create({
       data: {
         userId: booking.tenantId,
@@ -232,7 +293,7 @@ export class PaymentsService {
       },
     });
 
-    const intent = await this.provider.createPaymentLink(newPayment);
+    const intent = await this.provider.createPaymentIntent(newPayment);
 
     await this.prisma.payment.update({
       where: { id: newPayment.id },
@@ -244,7 +305,7 @@ export class PaymentsService {
 
     return {
       paymentId: newPayment.id,
-      checkoutUrl: intent.checkoutUrl,
+      clientSecret: intent.clientSecret,
     };
   }
 
@@ -263,6 +324,8 @@ export class PaymentsService {
   ==============
   */
   async handlePaymongoWebhook(payload: PaymongoWebhookPayload) {
+    // console.log(JSON.stringify(payload, null, 2));
+
     const eventType = payload?.data?.attributes?.event_type;
 
     const intent =
