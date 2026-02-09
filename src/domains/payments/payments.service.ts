@@ -75,7 +75,7 @@ export class PaymentsService {
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: {
-        providerPaymentIntentId: intent.id,
+        providerPaymentLinkId: intent.id, //!
         status: PaymentStatus.REQUIRES_ACTION,
       },
     });
@@ -264,21 +264,45 @@ export class PaymentsService {
   */
   async handlePaymongoWebhook(payload: PaymongoWebhookPayload) {
     const eventType = payload?.data?.attributes?.event_type;
+
     const intent =
       typeof payload.data.attributes.payment_intent === 'string'
         ? payload.data.attributes.payment_intent
         : payload.data.attributes.payment_intent?.id;
 
-    if (!intent) {
-      throw new BadRequestException('Missing payment intent id');
+    const link =
+      typeof payload.data.attributes.payment_link === 'string'
+        ? payload.data.attributes.payment_link
+        : payload.data.attributes.payment_link?.id;
+
+    if (!intent && !link) {
+      throw new BadRequestException('Missing payment identifiers');
     }
 
-    const payment = await this.prisma.payment.findFirst({
-      where: { providerPaymentIntentId: intent },
-    });
+    // 1️⃣ Try find by intent first
+    let payment = intent
+      ? await this.prisma.payment.findFirst({
+          where: { providerPaymentIntentId: intent },
+        })
+      : null;
+
+    // 2️⃣ Fallback → find by link
+    if (!payment && link) {
+      payment = await this.prisma.payment.findFirst({
+        where: { providerPaymentLinkId: link },
+      });
+    }
 
     if (!payment) {
       return { ignored: true };
+    }
+
+    // 3️⃣ If found via link, save intent now
+    if (intent && !payment.providerPaymentIntentId) {
+      payment = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { providerPaymentIntentId: intent },
+      });
     }
 
     // Idempotency guard

@@ -1,11 +1,16 @@
-export interface PaymongoWebhookPaymentIntentRef {
+export interface PaymongoWebhookRef {
   id: string;
   type?: string;
 }
 
 export interface PaymongoWebhookAttributes {
   event_type: string;
-  payment_intent: string | PaymongoWebhookPaymentIntentRef;
+
+  // May be string OR expanded object
+  payment_intent?: string | PaymongoWebhookRef;
+
+  // Add this 👇
+  payment_link?: string | PaymongoWebhookRef;
 }
 
 export interface PaymongoWebhookData {
