@@ -3,22 +3,51 @@ export interface PaymongoWebhookRef {
   type?: string;
 }
 
-export interface PaymongoWebhookAttributes {
-  event_type: string;
+/**
+ * Attributes inside the actual payment resource
+ */
+export interface PaymongoPaymentResourceAttributes {
+  payment_intent_id?: string;
+  payment_link_id?: string;
 
-  // May be string OR expanded object
-  payment_intent?: string | PaymongoWebhookRef;
+  // if expanded
+  payment_intent?: PaymongoWebhookRef;
+  payment_link?: PaymongoWebhookRef;
 
-  // Add this 👇
-  payment_link?: string | PaymongoWebhookRef;
+  // allow unknown extra fields safely
+  [key: string]: any;
 }
 
-export interface PaymongoWebhookData {
+/**
+ * The resource inside attributes.data
+ */
+export interface PaymongoWebhookResourceData {
   id: string;
-  type: string;
-  attributes: PaymongoWebhookAttributes;
+  type: string; // e.g. "payment"
+  attributes: PaymongoPaymentResourceAttributes;
 }
 
+/**
+ * Event attributes (top level attributes)
+ */
+export interface PaymongoWebhookEventAttributes {
+  type: string; // e.g. "payment.paid"
+  livemode: boolean;
+  data: PaymongoWebhookResourceData;
+
+  previous_data?: Record<string, any>;
+  pending_webhooks?: number;
+  created_at?: number;
+  updated_at?: number;
+}
+
+/**
+ * Top-level webhook payload
+ */
 export interface PaymongoWebhookPayload {
-  data: PaymongoWebhookData;
+  data: {
+    id: string; // evt_...
+    type: string; // "event"
+    attributes: PaymongoWebhookEventAttributes;
+  };
 }

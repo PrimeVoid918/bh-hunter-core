@@ -324,22 +324,21 @@ export class PaymentsService {
   ==============
   */
   async handlePaymongoWebhook(payload: PaymongoWebhookPayload) {
-    // console.log(JSON.stringify(payload, null, 2));
+    const eventType = payload?.data?.attributes?.type;
 
-    const eventType = payload?.data?.attributes?.event_type;
+    const resource = payload?.data?.attributes?.data;
+    const resourceAttributes = resource?.attributes;
 
     const intent =
-      typeof payload.data.attributes.payment_intent === 'string'
-        ? payload.data.attributes.payment_intent
-        : payload.data.attributes.payment_intent?.id;
+      resourceAttributes?.payment_intent_id ||
+      resourceAttributes?.payment_intent?.id;
 
     const link =
-      typeof payload.data.attributes.payment_link === 'string'
-        ? payload.data.attributes.payment_link
-        : payload.data.attributes.payment_link?.id;
+      resourceAttributes?.payment_link_id ||
+      resourceAttributes?.payment_link?.id;
 
     if (!intent && !link) {
-      throw new BadRequestException('Missing payment identifiers');
+      return { ignored: true }; // do NOT throw 400
     }
 
     // 1️⃣ Try find by intent first
