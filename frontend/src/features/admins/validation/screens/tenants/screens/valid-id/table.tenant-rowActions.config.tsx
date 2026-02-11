@@ -4,15 +4,15 @@ import { Box, Button, Flex, useDisclosure } from '@chakra-ui/react';
 import AsyncState from '@/features/shared/components/async-state/AsyncState';
 import { RootState } from '@/app/store/stores';
 import { useSelector } from 'react-redux';
-import { VerificationDocumentMetaData } from '@/infrastructure/documents/documents.type';
+import { PermitMetaData } from '@/infrastructure/permits/permits.types';
 import ModalWrapper from '@/features/shared/components/modal-wrapper/ModalWrapper';
-import PermitInfo from './permit-info/PermitInfo';
+// import PermitInfo from './permit-info/PermitInfo';
 import { usePatchVerificationDocumentMutation } from '@/infrastructure/valid-docs/valid-docs.redux.api';
 
 export default function TableOwnerRowActionsConfig({
   rowData,
 }: {
-  rowData: VerificationDocumentMetaData;
+  rowData: PermitMetaData;
 }) {
   const user = useSelector((state: RootState) => state.auth.user);
   const adminId = user?.id;

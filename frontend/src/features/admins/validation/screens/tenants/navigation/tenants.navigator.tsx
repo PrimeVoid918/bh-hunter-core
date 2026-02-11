@@ -1,5 +1,5 @@
 import TenantsInfoScreen from '../screens/tenants.info.screen';
-import TenantsMainScreen from '../screens/tenants.main.screen';
+import TenantsValidationMainScreen from '../screens/tenants.validation.main.screen';
 import TenantsLayout from './tenants.layout';
 
 export default function TenantsValidationNavigator() {
@@ -8,7 +8,7 @@ export default function TenantsValidationNavigator() {
     element: <TenantsLayout />,
     children: [
       //* registering navigators
-      { index: true, element: <TenantsMainScreen /> }, //* default screen
+      { index: true, element: <TenantsValidationMainScreen /> }, //* default screen
       { path: ':id', element: <TenantsInfoScreen /> },
     ],
   };

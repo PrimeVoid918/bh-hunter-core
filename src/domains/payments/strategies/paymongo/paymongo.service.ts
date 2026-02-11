@@ -118,7 +118,13 @@ export class PaymongoService {
     const sessionPayload = {
       data: {
         attributes: {
-          payment_method_types: ['gcash', 'paymaya', 'card', 'grab_pay'], // More options for tenants!
+          payment_method_types: [
+            'gcash',
+            'paymaya',
+            'card',
+            'grab_pay',
+            'qrph',
+          ], // More options for tenants!
           line_items: [
             {
               amount: Math.round(Number(payment.amount) * 100),

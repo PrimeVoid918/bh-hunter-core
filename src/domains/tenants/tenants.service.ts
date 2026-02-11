@@ -270,7 +270,7 @@ export class TenantsService {
     id: number,
     // payload: FindOneVerificationDto,
   ) {
-    console.log('hit?');
+    // console.log('hit?');
 
     if (!id || isNaN(id)) {
       throw new BadRequestException('Invalid document ID.');
@@ -321,11 +321,13 @@ export class TenantsService {
           false,
         );
 
-      const { tenantId, ownerId, tenant, ...safeData } =
+      const { tenantId, ownerId, tenant, url, ...safeData } =
         verificationDocumentData;
+      const normalizedUrl = url?.replace(/([^:]\/)\/+/g, '$1');
 
       return {
         ...safeData,
+        url: normalizedUrl,
         tenant: {
           id: tenantData.id,
           firstname: tenantData.firstname,

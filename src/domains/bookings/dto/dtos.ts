@@ -4,6 +4,8 @@ import {
   IsOptional,
   IsDate,
   IsEnum,
+  ValidateIf,
+  IsInt,
 } from 'class-validator';
 
 import { BookingStatus, BookingType } from '@prisma/client';
@@ -36,17 +38,27 @@ export class CreateBookingDto {
 export class FindAllBookingFilterDto {
   @Type(() => Number)
   @IsOptional()
-  @IsNumber()
+  @IsInt()
   tenantId?: number;
 
   @Type(() => Number)
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  ownerId?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
   roomId?: number;
 
   @Type(() => Number)
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  bookId?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
   boardingHouseId?: number; // optional if you're joining Room → BoardingHouse later
 
   @IsOptional()
@@ -57,13 +69,11 @@ export class FindAllBookingFilterDto {
   @IsEnum(BookingType)
   bookingType?: BookingType;
 
-  @Type(() => Date)
-  @IsOptional()
+  @ValidateIf((o) => o.fromCheckIn || o.toCheckIn)
   @IsDate()
   fromCheckIn?: Date;
 
-  @Type(() => Date)
-  @IsOptional()
+  @ValidateIf((o) => o.fromCheckIn || o.toCheckIn)
   @IsDate()
   toCheckIn?: Date;
 

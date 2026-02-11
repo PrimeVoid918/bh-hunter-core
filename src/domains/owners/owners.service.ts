@@ -430,11 +430,13 @@ export class OwnersService {
           false,
         );
 
-      const { tenantId, ownerId, owner, ...safeData } =
+      const { tenantId, ownerId, owner, url, ...safeData } =
         verificationDocumentData;
+      const normalizedUrl = url?.replace(/([^:]\/)\/+/g, '$1');
 
       return {
         ...safeData,
+        url: normalizedUrl,
         owner: {
           id: ownerData.id,
           firstname: ownerData.firstname,

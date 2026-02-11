@@ -2,36 +2,37 @@ import React from 'react';
 import { Flex, Box, Text, Button, useDisclosure } from '@chakra-ui/react';
 import styled from '@emotion/styled';
 import { PdfViewer } from '@/infrastructure/utils/pdf/PDFViewer.component';
-import {
-  useGetOneQuery,
-  usePatchVerificationDocumentMutation,
-} from '@/infrastructure/valid-docs/valid-docs.redux.api';
+// import {
+//   useGetOneQuery,
+//   usePatchVerificationDocumentMutation,
+// } from '@/infrastructure/valid-docs/valid-docs.redux.api';
 import AsyncState from '@/features/shared/components/async-state/AsyncState';
 import { parseIsoDate } from '@/infrastructure/utils/parseISODate.util';
 import DialogWrapper from '@/features/shared/components/dialog-wrapper/DialogWrapper';
 
-export default function PermitInfo({ permitId }: { permitId: number }) {
-  const {
-    data: permitData,
-    isLoading,
-    isError,
-    error,
-  } = useGetOneQuery({
-    entityType: 'owners',
-    id: permitId,
-  });
+export default function ValidationInfo({ permitId }: { permitId: number }) {
+  // const {
+  //   data: permitData,
+  //   isLoading,
+  //   isError,
+  //   error,
+  // } = useGetOneQuery({
+  //   entityType: 'owners',
+  //   id: permitId,
+  // });
+  const permitData: any = {};
   const permitDateObject = parseIsoDate(permitData?.createdAt);
 
   // Patch mutation
-  const [
-    patchDocument,
-    {
-      isLoading: isPatchLoading,
-      isError: isPatchError,
-      error: patchErrorObj,
-      reset,
-    },
-  ] = usePatchVerificationDocumentMutation();
+  // const [
+  //   patchDocument,
+  //   {
+  //     isLoading: isPatchLoading,
+  //     isError: isPatchError,
+  //     error: patchErrorObj,
+  //     reset,
+  //   },
+  // ] = usePatchVerificationDocumentMutation();
 
   // Modal controls
   const { isOpen, onOpen, onClose } = useDisclosure(); // Confirm modal
@@ -46,13 +47,13 @@ export default function PermitInfo({ permitId }: { permitId: number }) {
     if (!permitData) return;
 
     try {
-      await patchDocument({
-        permitId: permitData.id,
-        data: {
-          adminId: 1, // or from redux state
-          newVerificationStatus: actionType,
-        },
-      }).unwrap();
+      // await patchDocument({
+      //   permitId: permitData.id,
+      //   data: {
+      //     adminId: 1, // or from redux state
+      //     newVerificationStatus: actionType,
+      //   },
+      // }).unwrap();
 
       setResultMessage(
         `Document "${permitData.verificationType}" for ${permitData.ownerFullName} has been ${
@@ -74,17 +75,20 @@ export default function PermitInfo({ permitId }: { permitId: number }) {
 
   const openModalWithAction = (approve: boolean) => {
     setActionType(approve ? 'APPROVED' : 'REJECTED');
-    reset?.();
+    // reset?.();
     onOpen();
   };
 
   return (
     <>
       <AsyncState
-        isLoading={isLoading}
+        //! isLoading={isLoading}
+        isLoading={false}
         globalOverlay={false}
-        isError={isError}
-        errorObject={error}
+        //! isError={isError}
+        isError={false}
+        //! errorObject={error}
+        errorObject={{} as any}
         errorBody={(err) => {
           if ('status' in err) {
             if (err.status >= '500') return <Box>🚨 Server error (500)</Box>;
@@ -178,7 +182,8 @@ export default function PermitInfo({ permitId }: { permitId: number }) {
               <Button
                 colorScheme={actionType === 'APPROVED' ? 'green' : 'red'}
                 onClick={handleConfirmAction}
-                isLoading={isPatchLoading}
+                isLoading={false}
+                //! isLoading={isPatchLoading}
               >
                 {actionType === 'APPROVED' ? 'Approve' : 'Reject'}
               </Button>

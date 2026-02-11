@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { BaseUserSchema } from '../user/user.types';
 // import { BoardingHousesIdList } from '../boarding-houses/boarding-house.types';
-import { PermitMetaData } from '../permits/permits.types';
+import { PermitMetaData } from '../valid-docs/permits.types';
 
 // Base schema
 export const OwnerSchema = BaseUserSchema.extend({

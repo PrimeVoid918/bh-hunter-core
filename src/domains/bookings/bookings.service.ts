@@ -115,14 +115,24 @@ export class BookingsService {
   }
 
   async findAll(filter: FindAllBookingFilterDto) {
+    if (
+      filter.fromCheckIn &&
+      filter.toCheckIn &&
+      filter.fromCheckIn > filter.toCheckIn
+    ) {
+      throw new BadRequestException('fromCheckIn must be before toCheckIn');
+    }
+
     const {
       tenantId,
+      bookId,
       boardingHouseId,
       status,
       fromCheckIn,
       toCheckIn,
       page = 1,
       limit = 10,
+      roomId,
     } = filter;
 
     const toSkip = (Number(page) - 1) * Number(limit);
@@ -130,65 +140,121 @@ export class BookingsService {
     const where: any = {};
 
     if (tenantId !== undefined) where.tenantId = +tenantId;
-    if (boardingHouseId !== undefined) where.boardingHouseId = +boardingHouseId;
+    if (bookId !== undefined) where.id = +bookId;
     if (status !== undefined) where.status = status;
-    if (fromCheckIn && toCheckIn)
+
+    // Room filter
+    if (roomId !== undefined) where.room = { id: +roomId };
+
+    // Boarding house filter
+    if (boardingHouseId !== undefined) {
+      where.room = { ...(where.room ?? {}), boardingHouseId: +boardingHouseId };
+    }
+
+    // Check-in date filter
+    if (fromCheckIn && toCheckIn) {
       where.checkInDate = { gte: fromCheckIn, lte: toCheckIn };
+    }
 
-    console.log('where: ', where);
-
+    // Fetch bookings
     const bookings = await this.prisma.booking.findMany({
       skip: toSkip,
       take: Number(limit),
       where,
       orderBy: { checkInDate: 'asc' },
       include: {
-        tenant: {
-          select: {
-            id: true,
-            firstname: true,
-            lastname: true,
-            age: true,
-            email: true,
-            phone_number: true,
-          },
-        },
+        tenant: { select: { id: true, firstname: true, lastname: true } },
         room: {
           select: {
+            id: true,
             roomNumber: true,
-            //!
             availabilityStatus: true,
             price: true,
+            boardingHouse: { select: { id: true, name: true, ownerId: true } },
           },
         },
       },
     });
 
-    const bookingsWithRoomThumbnail = await Promise.all(
-      bookings.map(async (book) => {
-        const { room, ...bookData } = book;
+    if (!bookings.length) return [];
 
-        const images = await this.prisma.image.findMany({
-          where: {
-            entityType: ResourceType.ROOM,
-            entityId: { in: [book.roomId] },
+    // Collect room and boarding house IDs for images
+    const roomIds = [...new Set(bookings.map((b) => b.roomId))];
+    const boardingHouseIds = [
+      ...new Set(bookings.map((b) => b.room.boardingHouse.id)),
+    ];
+
+    // Fetch images in batches
+    const roomImages = await this.prisma.image.findMany({
+      where: { entityType: ResourceType.ROOM, entityId: { in: roomIds } },
+    });
+
+    const bhImages = await this.prisma.image.findMany({
+      where: {
+        entityType: ResourceType.BOARDING_HOUSE,
+        entityId: { in: boardingHouseIds },
+      },
+    });
+
+    // Map images by entity
+    const imagesByRoom = new Map<number, typeof roomImages>();
+    for (const img of roomImages) {
+      if (!imagesByRoom.has(img.entityId)) imagesByRoom.set(img.entityId, []);
+      imagesByRoom.get(img.entityId)!.push(img);
+    }
+
+    const imagesByBoardingHouse = new Map<number, typeof bhImages>();
+    for (const img of bhImages) {
+      if (!imagesByBoardingHouse.has(img.entityId))
+        imagesByBoardingHouse.set(img.entityId, []);
+      imagesByBoardingHouse.get(img.entityId)!.push(img);
+    }
+
+    // Build normalized response
+    return Promise.all(
+      bookings.map(async (booking) => {
+        const roomImgs = imagesByRoom.get(booking.roomId) ?? [];
+        const bhImgs =
+          imagesByBoardingHouse.get(booking.room.boardingHouse.id) ?? [];
+
+        const { thumbnail: roomThumbnail } =
+          await this.imageService.getImageMetaData(
+            roomImgs,
+            (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
+            ResourceType.ROOM,
+            booking.roomId,
+            [MediaType.THUMBNAIL],
+          );
+
+        const { thumbnail: bhThumbnail } =
+          await this.imageService.getImageMetaData(
+            bhImgs,
+            (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
+            ResourceType.BOARDING_HOUSE,
+            booking.room.boardingHouse.id,
+            [MediaType.THUMBNAIL],
+          );
+
+        // Top-level normalized object
+        const result: any = {
+          ...booking,
+          room: {
+            ...booking.room,
+            thumbnail: roomThumbnail,
           },
-        });
-        const { thumbnail } = await this.imageService.getImageMetaData(
-          images,
-          (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
-          ResourceType.ROOM,
-          book.roomId,
-          [MediaType.THUMBNAIL],
-        );
-        // const roomImages = images.filter()
-        return { ...bookData, room: { ...room, thumbnail } };
+        };
+
+        // Only include boardingHouse if query requested it or room filter didn't exclude it
+        if (boardingHouseId !== undefined || roomId === undefined) {
+          result.boardingHouse = {
+            ...booking.room.boardingHouse,
+            thumbnail: bhThumbnail,
+          };
+        }
+
+        return result;
       }),
     );
-
-    // console.log('bookingsWithRoomThumbnail: ', bookingsWithRoomThumbnail);
-
-    return bookingsWithRoomThumbnail;
   }
 
   async findOne(bookId: number) {

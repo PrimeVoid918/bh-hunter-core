@@ -1,16 +1,15 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import styled from '@emotion/styled';
-import DataTable from '@/features/shared/components/data-table/DataTable';
-import { useGetAllQuery } from '@/infrastructure/permits/permits.redux.api';
-import { PermitMetaData } from '../../../../../../../infrastructure/permits/permits.types';
-import { tableConfig } from './table.config';
 import BaseWrapper from '@/features/shared/layouts/wrappers/base-wrapper';
 import { Box, Button, useColorMode } from '@chakra-ui/react';
 import AsyncState from '@/features/shared/components/async-state/AsyncState';
+import { useGetAllQuery } from '@/infrastructure/valid-docs/valid-docs.redux.api';
+import DataTable from '@/features/shared/components/data-table/DataTable';
+// import tablecon
 
-export default function OwnersMainScreen() {
+export default function TenantsValidationainScreen() {
   const { colorMode } = useColorMode();
-  const { data, isError, error, isLoading } = useGetAllQuery('owners');
+  const { data, isError, error, isLoading } = useGetAllQuery('tenants');
 
   return (
     <ResponsiveContainer colorMode={colorMode}>
@@ -56,12 +55,8 @@ export default function OwnersMainScreen() {
           );
         }}
       >
-        <DataTable<PermitMetaData>
-          data={data ?? []}
-          tableConfig={tableConfig}
-          emptyTableMessage='No permits found.'
-          enableGlobalSearch
-        />
+      {/* <ValidationTable data={data ?? []} /> */}
+      <div>sdas</div>
       </AsyncState>
     </ResponsiveContainer>
   );

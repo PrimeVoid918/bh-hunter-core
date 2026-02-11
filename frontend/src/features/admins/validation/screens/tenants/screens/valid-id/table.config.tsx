@@ -5,7 +5,7 @@ import {
   VerificationType,
 } from '@/infrastructure/documents/documents.type';
 import { createFilterElement } from '@/features/shared/components/data-table/services';
-import TableOwnerRowActionsConfig from './table.owner-rowActions.config';
+import TableOwnerRowActionsConfig from './table.tenant-rowActions.config';
 
 export const tableConfig: TableConfig<VerificationDocumentMetaData>[] = [
   {

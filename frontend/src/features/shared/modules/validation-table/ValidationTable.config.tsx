@@ -1,13 +1,17 @@
-import { TableConfig } from '../../../../../../shared/components/data-table/types';
 import {
   VerificationDocumentMetaData,
   VerificationStatus,
   VerificationType,
 } from '@/infrastructure/documents/documents.type';
+import { TableConfig } from '../../components/data-table/types';
 import { createFilterElement } from '@/features/shared/components/data-table/services';
-import TableOwnerRowActionsConfig from './table.owner-rowActions.config';
+import ValidationTableRowActionsConfig from './ValidationTableRowActionsConfig';
 
-export const tableConfig: TableConfig<VerificationDocumentMetaData>[] = [
+export const createValidationTableConfig = (actions: {
+  onApprove: (row: VerificationDocumentMetaData) => void;
+  onReject: (row: VerificationDocumentMetaData) => void;
+  onDelete: (row: VerificationDocumentMetaData) => void;
+}): TableConfig<VerificationDocumentMetaData>[] => [
   {
     columnName: 'Owner',
     field: 'ownerFullName',
@@ -43,7 +47,7 @@ export const tableConfig: TableConfig<VerificationDocumentMetaData>[] = [
     field: 'actions',
     filterType: undefined,
     actionComponent: (rowData: VerificationDocumentMetaData) => {
-      return <TableOwnerRowActionsConfig rowData={rowData} />;
+      return <ValidationTableRowActionsConfig rowData={rowData} {...actions} />;
     },
   },
 ];

@@ -8,7 +8,7 @@ import tenantSlice from '../../infrastructure/tenants/tenant.redux.slice';
 import ownerSlice, {
   ownerApi,
 } from '../../infrastructure/owner/owner.redux.slice';
-import { permitsApi } from '@/infrastructure/permits/permits.redux.api';
+import { validDocsApi } from '@/infrastructure/valid-docs/valid-docs.redux.api';
 
 export const store = configureStore({
   reducer: {
@@ -21,7 +21,7 @@ export const store = configureStore({
     owners: ownerSlice,
     [ownerApi.reducerPath]: ownerApi.reducer,
     // permits: permitSlice
-    [permitsApi.reducerPath]: permitsApi.reducer,
+    [validDocsApi.reducerPath]: validDocsApi.reducer,
     // boardingHouses: boardingHouseSlice,
     // [boardingHouseApi.reducerPath]: boardingHouseApi.reducer,
   },
@@ -32,7 +32,7 @@ export const store = configureStore({
       .concat(adminApi.middleware)
       .concat(tenantApi.middleware)
       .concat(ownerApi.middleware)
-      .concat(permitsApi.middleware),
+      .concat(validDocsApi.middleware),
   // .concat(boardingHouseApi.middleware),,
 });
 
