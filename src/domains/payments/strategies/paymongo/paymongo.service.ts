@@ -134,6 +134,8 @@ export class PaymongoService {
             },
           ],
           description: `Booking payment for room`,
+          success_url: 'bhhunter://payment-success',
+          cancel_url: 'bhhunter://payment-cancel',
           metadata: {
             paymentId: String(payment.id),
             bookingId: String(payment.bookingId),

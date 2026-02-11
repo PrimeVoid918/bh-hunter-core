@@ -374,10 +374,10 @@ export class PaymentsService {
     }
 
     switch (eventType) {
-      case 'payment_intent.succeeded':
+      case 'payment.paid':
         return this.markPaymentPaid(payment);
 
-      case 'payment_intent.payment_failed':
+      case 'payment.failed':
         return this.markPaymentFailed(payment);
 
       default:
