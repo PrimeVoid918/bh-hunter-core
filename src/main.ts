@@ -4,13 +4,13 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { SwaggerTheme, SwaggerThemeNameEnum } from 'swagger-themes';
 import ip from 'ip';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import express from 'express';
 import { ConfigService } from './config/config.service';
-import { resolve } from 'path';
-import { ExpressAdapter } from '@nestjs/platform-express';
 import { existsSync } from 'fs';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import { generateDiagram } from './spelunk';
+import bodyParser from 'body-parser';
 
 async function bootstrap() {
   const server = express();
@@ -22,22 +22,37 @@ async function bootstrap() {
       ? join(process.cwd(), 'public')
       : join(__dirname, '..', 'public');
 
-  server.use(express.static(publicPath));
+  // 1️⃣ Global JSON parser for all endpoints
 
-  app.use(
-    '/media/public', //* actual web url path not the physical one
+  // 2️⃣ Webhook-specific JSON parser to capture rawBody
+  server.use(
+    '/api/payments/webhook/paymongo',
+    bodyParser.raw({
+      type: 'application/json',
+      verify: (req, res, buf) => {
+        (req as any).rawBody = buf; // attach raw buffer to req.rawBody
+      },
+    }),
+  );
+
+  server.use(express.json());
+
+  // Static file serving
+  server.use(express.static(publicPath));
+  server.use(
+    '/media/public',
     express.static(resolve(process.cwd(), configService.mediaPaths.public)),
   );
-  app.use(
-    // TODO: tirm this into a guarded route
-    '/media/private', //* actual web url path not the physical one
+  server.use(
+    '/media/private',
     express.static(resolve(process.cwd(), configService.mediaPaths.private)),
   );
+
+  // Swagger setup
   const swagConfig = new DocumentBuilder()
     .setTitle('API')
     .setDescription('BH Api')
     .setVersion('1.0')
-    // .addTag('api')
     .build();
 
   const document = SwaggerModule.createDocument(app, swagConfig);
@@ -46,28 +61,30 @@ async function bootstrap() {
     explorer: true,
     customCss: theme.getBuffer(SwaggerThemeNameEnum.DARK),
   };
+  SwaggerModule.setup('docs', app, document, options);
 
+  // Global prefix & validation
   app.setGlobalPrefix('api');
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
     }),
   );
-  SwaggerModule.setup('docs', app, document, options);
 
   await generateDiagram();
 
+  // CORS
   app.enableCors({
     origin: [
-      'http://10.122.68.117:5173', // your Vite dev frontend IP + port
+      'http://10.122.68.117:5173',
       process.env.NODE_ENV !== 'production'
         ? 'http://localhost:5173'
         : 'https://bhhph.online',
     ],
-    credentials: true, // if you use cookies/auth headers
+    credentials: true,
   });
 
-  // React Fall back
+  // React SPA fallback
   server.get(/^\/(?!api).*/, (req: express.Request, res: express.Response) => {
     const indexPath = join(publicPath, 'index.html');
     if (existsSync(indexPath)) {
@@ -78,8 +95,7 @@ async function bootstrap() {
   });
 
   const port = 3000;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  const localIp: string = ip.address(); // uselless kay maka listen ra diay ka sa tanan port using 0.0.0.0
+  const localIp: string = ip.address();
   console.log(`🚀 Server running at http://${localIp}:${port}`);
 
   await app.listen(port, '0.0.0.0');
