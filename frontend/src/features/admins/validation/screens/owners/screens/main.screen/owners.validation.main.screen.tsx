@@ -8,39 +8,51 @@ import {
   useGetAllQuery,
   // usePatchVerificationDocumentMutation,
   useDeleteMutation,
-  useApproveMutation,
-  useRejectMutation,
+  usePatchMutation,
 } from '@/infrastructure/valid-docs/valid-docs.redux.api';
 import { VerificationDocumentMetaData } from '@/infrastructure/documents/documents.type';
+import { useSelector } from 'react-redux';
+import { selectAdminId } from '@/infrastructure/auth/auth.redux.slice';
 
 export default function OwnersValidationMainScreen() {
   const { colorMode } = useColorMode();
   const toast = useToast();
+  const thisTableIsFor = 'owners';
 
   const { data, isLoading, isError, error } = useGetAllQuery('owners');
   // const [patchDocument, patchState] = usePatchVerificationDocumentMutation();
-  const [approveDocument, {}] = useApproveMutation();
-  const [rejectDocument, {}] = useRejectMutation();
   const [deleteDocument] = useDeleteMutation();
+  const [patchDocument] = usePatchMutation();
+
+  const adminId = useSelector(selectAdminId);
+  if (!adminId) {
+    return 'Admin ID could not be loaded';
+  }
 
   // Handlers
   const handleApprove = async (row: VerificationDocumentMetaData) => {
     try {
-      await approveDocument({
+      await patchDocument({
         id: row.id,
-        sourceTarget: 'owners',
+        sourceTarget: thisTableIsFor,
+        payload: {
+          adminId: adminId,
+          verificationStatus: 'APPROVED',
+          rejectReason: undefined,
+        },
       }).unwrap();
       toast({
         title: 'Approved',
-        description: `${row.verificationType} of ${row.ownerFullName} has been approved.`,
+        description: `${row.verificationType} of ${row.user.firstname} ${row.user.lastname} has been approved.`,
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
-    } catch {
+    } catch (e: unknown) {
+      console.log('error in approve: ', e);
       toast({
         title: 'Error',
-        description: `Failed to approve ${row.verificationType} of ${row.ownerFullName}.`,
+        description: `Failed to approve ${row.verificationType} of ${row.user.firstname} ${row.user.lastname}.`,
         status: 'error',
         duration: 4000,
         isClosable: true,
@@ -48,15 +60,24 @@ export default function OwnersValidationMainScreen() {
     }
   };
 
-  const handleReject = async (row: VerificationDocumentMetaData) => {
+  const handleReject = async (
+    row: VerificationDocumentMetaData,
+    rejectReason: string,
+  ) => {
+    console.log('rejectReaon:', rejectReason);
     try {
-      await rejectDocument({
+      await patchDocument({
         id: row.id,
-        sourceTarget: 'owners',
+        sourceTarget: thisTableIsFor,
+        payload: {
+          adminId: adminId,
+          verificationStatus: 'REJECTED',
+          rejectReason: rejectReason,
+        },
       }).unwrap();
       toast({
         title: 'Rejected',
-        description: `${row.verificationType} of ${row.ownerFullName} has been rejected.`,
+        description: `${row.verificationType} of ${row.user.firstname} ${row.user.lastname} has been rejected.`,
         status: 'warning',
         duration: 3000,
         isClosable: true,
@@ -64,7 +85,7 @@ export default function OwnersValidationMainScreen() {
     } catch {
       toast({
         title: 'Error',
-        description: `Failed to reject ${row.verificationType} of ${row.ownerFullName}.`,
+        description: `Failed to reject ${row.verificationType} of ${row.user.firstname} ${row.user.lastname}.`,
         status: 'error',
         duration: 4000,
         isClosable: true,
@@ -76,11 +97,12 @@ export default function OwnersValidationMainScreen() {
     try {
       await deleteDocument({
         id: row.id,
-        sourceTarget: 'owners',
+        sourceTarget: thisTableIsFor,
+        adminId: adminId,
       }).unwrap();
       toast({
         title: 'Deleted',
-        description: `${row.verificationType} of ${row.ownerFullName} has been deleted.`,
+        description: `${row.verificationType} of ${row.user.firstname} ${row.user.lastname} has been deleted.`,
         status: 'info',
         duration: 3000,
         isClosable: true,
@@ -88,7 +110,7 @@ export default function OwnersValidationMainScreen() {
     } catch {
       toast({
         title: 'Error',
-        description: `Failed to delete ${row.verificationType} of ${row.ownerFullName}.`,
+        description: `Failed to delete ${row.verificationType} of ${row.user.firstname} ${row.user.lastname}.`,
         status: 'error',
         duration: 4000,
         isClosable: true,
@@ -135,6 +157,7 @@ export default function OwnersValidationMainScreen() {
       >
         <ValidationTable
           data={data ?? []}
+          thisTableIsFor={thisTableIsFor}
           onApprove={handleApprove}
           onReject={handleReject}
           onDelete={handleDelete}

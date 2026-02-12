@@ -287,7 +287,7 @@ export class OwnersService {
     const prisma = this.prisma;
 
     const verificationDocuments = await prisma.verificationDocument.findMany({
-      where: { userType: 'OWNER' },
+      where: { isDeleted: false, userType: 'OWNER' },
       // don't include owner because ownerId is null
     });
 
@@ -317,7 +317,7 @@ export class OwnersService {
 
           return {
             ...safeData,
-            owner: {
+            user: {
               id: ownerData.id,
               firstname: ownerData.firstname,
               lastname: ownerData.lastname,
@@ -437,7 +437,7 @@ export class OwnersService {
       return {
         ...safeData,
         url: normalizedUrl,
-        owner: {
+        user: {
           id: ownerData.id,
           firstname: ownerData.firstname,
           lastname: ownerData.lastname,

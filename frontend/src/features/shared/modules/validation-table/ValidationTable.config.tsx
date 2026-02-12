@@ -8,13 +8,31 @@ import { createFilterElement } from '@/features/shared/components/data-table/ser
 import ValidationTableRowActionsConfig from './ValidationTableRowActionsConfig';
 
 export const createValidationTableConfig = (actions: {
+  thisTableIsFor: string;
   onApprove: (row: VerificationDocumentMetaData) => void;
-  onReject: (row: VerificationDocumentMetaData) => void;
+  onReject: (row: VerificationDocumentMetaData, rejectReason: string) => void;
   onDelete: (row: VerificationDocumentMetaData) => void;
 }): TableConfig<VerificationDocumentMetaData>[] => [
+  // {
+  //   columnName: 'Firstname',
+  //   field: 'user.firstname',
+  //   filterType: 'input',
+  // },
+  // {
+  //   columnName: 'Lastname',
+  //   field: 'user.lastname',
+  //   filterType: 'input',
+  // },
   {
-    columnName: 'Owner',
-    field: 'ownerFullName',
+    columnName: 'Full Name',
+    field: 'fullName', // Virtual field
+    filterType: 'input',
+    // Search will look through this combined string:
+    resolveValue: (row) => `${row.user.firstname} ${row.user.lastname}`,
+  },
+  {
+    columnName: 'Email',
+    field: 'user.email', // Automatic dot-notation resolution
     filterType: 'input',
   },
   {

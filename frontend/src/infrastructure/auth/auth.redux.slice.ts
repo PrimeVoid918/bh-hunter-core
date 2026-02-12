@@ -79,6 +79,12 @@ const authSlice = createSlice({
 // -------------------------
 
 /**
+ * Selector: Returns the current user's ID.
+ */
+export const selectAdminId = (state: { auth: AuthState }) =>
+  state.auth.user?.id; // Assumes your AdminData has an 'id' property
+
+/**
  * Selector: Returns whether a user is logged in.
  */
 export const selectIsLoggedIn = (state: { auth: AuthState }) =>

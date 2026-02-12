@@ -36,6 +36,9 @@ export interface TableConfig<T> {
   /** Match mode for filtering (e.g., contains, startsWith) */
   filterMatchMode?: FilterMatchModeType;
 
+  // This is the magic: it tells the table how to "calculate" a searchable value
+  resolveValue?: (rowData: T) => string | number | null | undefined;
+
   /**
    * Custom rendering function for the filter element.
    * Receives options from PrimeReact and should return a JSX element.
@@ -50,7 +53,12 @@ export interface TableConfig<T> {
    * Optional custom rendering for action buttons or components.
    * Receives the row data object and should return JSX.
    */
-  actionComponent?: (rowData: T) => JSX.Element;
+  actionComponent?: (
+    rowData: T,
+
+    /** Optional prop drilling value */
+    thisTableIsFor?: string,
+  ) => JSX.Element;
 
   /**
    * Optional custom cell rendering for this column.

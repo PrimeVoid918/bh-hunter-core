@@ -5,13 +5,15 @@ import { createValidationTableConfig } from './ValidationTable.config';
 
 interface ValidationTableInterface {
   data: VerificationDocumentMetaData[];
+  thisTableIsFor: string;
   onApprove: (row: VerificationDocumentMetaData) => void;
-  onReject: (row: VerificationDocumentMetaData) => void;
+  onReject: (row: VerificationDocumentMetaData, rejectReason: string,) => void;
   onDelete: (row: VerificationDocumentMetaData) => void;
 }
 
 export default function ValidationTable({
   data,
+  thisTableIsFor,
   onApprove,
   onDelete,
   onReject,
@@ -19,11 +21,12 @@ export default function ValidationTable({
   const tableConfig = React.useMemo(
     () =>
       createValidationTableConfig({
+        thisTableIsFor,
         onApprove,
         onDelete,
         onReject,
       }),
-    [onApprove, onDelete, onReject],
+    [thisTableIsFor, onApprove, onDelete, onReject],
   );
 
   return (

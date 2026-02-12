@@ -27,6 +27,28 @@ export default function DataTable<T>({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const typedData = data as DataTableValueArray;
 
+  // PROCESS DATA FOR SEARCHABILITY
+  const processedData = React.useMemo(() => {
+    return data.map((row: any) => {
+      const flattenedRow = { ...row };
+
+      tableConfig.forEach((config) => {
+        // 1. If a custom resolver exists (e.g., for Full Name)
+        if (config.resolveValue) {
+          flattenedRow[config.field] = config.resolveValue(row);
+        }
+        // 2. If it's a nested dot-notation field (e.g., "user.email")
+        else if (config.field.includes('.')) {
+          flattenedRow[config.field] = config.field
+            .split('.')
+            .reduce((acc, part) => acc?.[part], row);
+        }
+      });
+
+      return flattenedRow;
+    });
+  }, [data, tableConfig]);
+
   const initialFilters: DataTableFilterMeta = {
     global: { value: null, matchMode: FilterMatchMode.CONTAINS },
     ...Object.fromEntries(
@@ -39,6 +61,18 @@ export default function DataTable<T>({
       ]),
     ),
   };
+  // const initialFilters: DataTableFilterMeta = {
+  //   global: { value: null, matchMode: FilterMatchMode.CONTAINS },
+  //   ...Object.fromEntries(
+  //     tableConfig.map((col) => [
+  //       col.field,
+  //       {
+  //         value: null,
+  //         matchMode: col.filterMatchMode ?? FilterMatchMode.CONTAINS,
+  //       },
+  //     ]),
+  //   ),
+  // };
 
   const [filters, setFilters] = useState<DataTableFilterMeta>(initialFilters);
   const [globalFilterValue, setGlobalFilterValue] = useState<string>('');
@@ -75,16 +109,20 @@ export default function DataTable<T>({
   return (
     <TableContainer colorMode={colorMode} ref={containerRef}>
       <PrimeDataTable
-        value={typedData}
+        value={processedData as DataTableValueArray}
+        // value={typedData}
         paginator
         rows={10}
         onPage={(e) => setPageIndex(e.page ?? 0)}
         dataKey="id"
         filters={filters}
         filterDisplay="row"
+        // globalFilterFields={tableConfig
+        //   .filter((c) => c.field !== 'actions')
+        //   .map((c) => c.field as string)}
         globalFilterFields={tableConfig
           .filter((c) => c.field !== 'actions')
-          .map((c) => c.field as string)}
+          .map((c) => c.field)}
         header={enableGlobalSearch ? renderHeader() : undefined}
         emptyMessage={emptyTableMessage}
         scrollable
@@ -94,7 +132,8 @@ export default function DataTable<T>({
         {tableConfig.map((config, index) => (
           <Column
             key={index}
-            field={config.field as string}
+            // field={config.field as string}
+            field={config.field}
             header={config.columnName}
             filter={!!config.filterType} // only true if filterType exists
             filterPlaceholder={config.placeholder}
@@ -110,20 +149,31 @@ export default function DataTable<T>({
                     config.filterElement!(options, containerRef.current)
                 : undefined
             }
-            body={
-              config.body
-                ? (rowData) => config.body!(rowData)
-                : config.actionComponent
-                  ? (rowData) => (
-                      <div
-                        style={{ display: 'flex', gap: '1rem' }}
-                        className="actions"
-                      >
-                        {config.actionComponent!(rowData)}
-                      </div>
-                    )
-                  : (rowData) => <>{(rowData as any)[config.field]}</>
-            }
+            // body={
+            //   config.body
+            //     ? (rowData) => config.body!(rowData)
+            //     : config.actionComponent
+            //       ? (rowData) => (
+            //           <div
+            //             style={{ display: 'flex', gap: '1rem' }}
+            //             className="actions"
+            //           >
+            //             {config.actionComponent!(rowData)}
+            //           </div>
+            //         )
+            //       : (rowData) => <>{(rowData as any)[config.field]}</>
+            // }
+            body={(rowData) => {
+              if (config.body) return config.body(rowData);
+              if (config.actionComponent)
+                return (
+                  <div className="actions">
+                    {config.actionComponent(rowData)}
+                  </div>
+                );
+              // Fallback to the resolved/flattened value
+              return <>{rowData[config.field] ?? ''}</>;
+            }}
             style={{ minWidth: '14rem' }}
           />
         ))}

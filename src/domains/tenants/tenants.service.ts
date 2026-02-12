@@ -107,12 +107,14 @@ export class TenantsService {
   findOne(id: number) {
     const prisma = this.prisma;
 
+    //! no account
     if (!id) {
       throw new BadRequestException('Id is required');
     }
 
     return prisma.tenant.findUnique({
       where: {
+        isDeleted: false,
         id: id,
       },
     });
@@ -219,7 +221,7 @@ export class TenantsService {
     const prisma = this.prisma;
 
     const verificationDocuments = await prisma.verificationDocument.findMany({
-      where: { userType: 'TENANT' },
+      where: { isDeleted: false, userType: 'TENANT' },
     });
 
     const results = await Promise.all(
@@ -247,7 +249,7 @@ export class TenantsService {
 
           return {
             ...safeData,
-            tenant: {
+            user: {
               id: tenantData.id,
               firstname: tenantData.firstname,
               lastname: tenantData.lastname,
@@ -285,7 +287,7 @@ export class TenantsService {
     try {
       // 1️⃣ Fetch the verification document
       const verificationDocument = await prisma.verificationDocument.findFirst({
-        where: { id: id, userType: 'TENANT' },
+        where: { isDeleted: false, id: id, userType: 'TENANT' },
       });
 
       if (!verificationDocument) {
@@ -328,7 +330,7 @@ export class TenantsService {
       return {
         ...safeData,
         url: normalizedUrl,
-        tenant: {
+        user: {
           id: tenantData.id,
           firstname: tenantData.firstname,
           lastname: tenantData.lastname,
@@ -481,6 +483,7 @@ export class TenantsService {
 
     const tenant = await this.prisma.verificationDocument.findMany({
       where: {
+        isDeleted: false,
         userId: tenantId,
         userType: 'TENANT',
       },

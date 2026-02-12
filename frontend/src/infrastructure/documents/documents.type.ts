@@ -66,7 +66,12 @@ export const VerificationDocumentMetaDataSchema = z
     updatedAt: ISODateString,
     isDeleted: z.boolean(),
     deletedAt: ISODateString.nullable().optional(),
-    ownerFullName: z.string(),
+    user: z.object({
+      id: z.number().int().positive(),
+      firstname: z.string(),
+      lastname: z.string(),
+      email: z.string().email(),
+    }),
   })
   .strict();
 
@@ -74,6 +79,34 @@ export const VerificationDocumentMetaDataSchema = z
 export const VerificationDocumentMetaDataArraySchema = z.array(
   VerificationDocumentMetaDataSchema,
 );
+
+export const VerificationDocumentMetaDataGetOneSchema = z
+  .object({
+    id: z.number().int().positive(),
+    userId: z.number().int().positive(),
+    userType: UserRoleSchema,
+    fileFormat: FileFormatSchema,
+    verificationType: VerificationTypeSchema,
+    url: z.string().min(1),
+    expiresAt: ISODateString,
+    verificationStatus: VerificationStatusSchema,
+    verifiedById: z.number().int().nullable().optional(),
+    verifiedAt: ISODateString.nullable().optional(),
+    approvedAt: ISODateString.nullable().optional(),
+    rejectionReason: z.string().nullable().optional(),
+    uploadedAt: ISODateString,
+    createdAt: ISODateString,
+    updatedAt: ISODateString,
+    isDeleted: z.boolean(),
+    deletedAt: ISODateString.nullable().optional(),
+    user: z.object({
+      id: z.number().int().positive(),
+      firstname: z.string(),
+      lastname: z.string(),
+      email: z.string().email(),
+    }),
+  })
+  .strict();
 
 /** Payload for creating a VerificationDocument */
 export const CreateVerificationDocumentSchema = z
@@ -113,6 +146,9 @@ export type VerificationType = z.infer<typeof VerificationTypeSchema>;
 export type VerificationStatus = z.infer<typeof VerificationStatusSchema>;
 export type UserRole = z.infer<typeof UserRoleSchema>;
 export type VerificationDocumentMetaData = z.infer<
+  typeof VerificationDocumentMetaDataSchema
+>;
+export type VerificationDocumentMetaDataGetOne = z.infer<
   typeof VerificationDocumentMetaDataSchema
 >;
 export type CreateVerificationDocumentDto = z.infer<

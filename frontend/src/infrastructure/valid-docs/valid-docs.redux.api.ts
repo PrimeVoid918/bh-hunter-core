@@ -2,9 +2,14 @@ import { BACKEND_API } from '@/app/config/api';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { ApiResponseType } from '../common/types/backend-reponse.type';
 import {
+  VerificationDocumentMetaDataGetOne,
+  VerificationStatus,
+} from '../documents/documents.type';
+import {
   VerificationDocumentMetaData,
   UserRoleType,
 } from '../documents/documents.type';
+import { UserRole } from '../user/user.types';
 
 const documentTypeResolver = (sourceType: UserRoleType) =>
   sourceType === 'owners' ? 'permits' : 'valid-id';
@@ -49,38 +54,80 @@ export const validDocsApi = createApi({
           : [{ type: 'VerificationDocuments', id: `${sourceTarget}-LIST` }],
     }),
 
-    /**
-     * Approve document
-     */
-    approve: builder.mutation<
-      VerificationDocumentMetaData,
-      { id: number; sourceTarget: UserRoleType }
+    getOne: builder.query<
+      VerificationDocumentMetaDataGetOne,
+      { userType: UserRoleType; documentId: number }
     >({
-      query: ({ id, sourceTarget }) => ({
-        url: `/${sourceTarget}/${id}/${documentTypeResolver(
-          sourceTarget,
-        )}/approve`,
-        method: 'PATCH',
-      }),
-      invalidatesTags: (result, error, { id, sourceTarget }) => [
-        { type: 'VerificationDocuments', id: `${sourceTarget}-${id}` },
-        { type: 'VerificationDocuments', id: `${sourceTarget}-LIST` },
-      ],
+      query: ({ userType, documentId }) =>
+        `/${userType}/${documentId}/${documentTypeResolver(userType)}`,
+      transformResponse: (
+        response: ApiResponseType<VerificationDocumentMetaDataGetOne>,
+      ) => response.results ?? [],
+      providesTags: (result, error, sourceTarget) =>
+        result
+          ? [
+              // single object tag
+              {
+                type: 'VerificationDocuments' as const,
+                id: `${sourceTarget}-${result.id}`,
+              },
+              // general list tag
+              { type: 'VerificationDocuments', id: `${sourceTarget}-LIST` },
+            ]
+          : [{ type: 'VerificationDocuments', id: `${sourceTarget}-LIST` }],
     }),
 
-    /**
-     * Reject document
-     */
-    reject: builder.mutation<
+    // /**
+    //  * Approve document
+    //  */
+    // approve: builder.mutation<
+    //   VerificationDocumentMetaData,
+    //   { id: number; sourceTarget: UserRoleType }
+    // >({
+    //   query: ({ id, sourceTarget }) => ({
+    //     url: `/${sourceTarget}/${documentTypeResolver(sourceTarget)}/${id}`,
+    //     method: 'PATCH',
+    //   }),
+    //   invalidatesTags: (result, error, { id, sourceTarget }) => [
+    //     { type: 'VerificationDocuments', id: `${sourceTarget}-${id}` },
+    //     { type: 'VerificationDocuments', id: `${sourceTarget}-LIST` },
+    //   ],
+    // }),
+
+    // /**
+    //  * Reject document
+    //  */
+    // reject: builder.mutation<
+    //   VerificationDocumentMetaData,
+    //   { id: number; sourceTarget: UserRoleType; reason?: string }
+    // >({
+    //   query: ({ id, sourceTarget, reason }) => ({
+    //     url: `/${sourceTarget}/${documentTypeResolver(sourceTarget)}/${id}`,
+    //     method: 'PATCH',
+    //     body: reason ? { reason } : undefined,
+    //   }),
+    //   invalidatesTags: (result, error, { id, sourceTarget }) => [
+    //     { type: 'VerificationDocuments', id: `${sourceTarget}-${id}` },
+    //     { type: 'VerificationDocuments', id: `${sourceTarget}-LIST` },
+    //   ],
+    // }),
+
+    patch: builder.mutation<
       VerificationDocumentMetaData,
-      { id: number; sourceTarget: UserRoleType; reason?: string }
+      {
+        id: number;
+        sourceTarget: UserRoleType;
+        payload: {
+          adminId: number;
+          rejectReason?: string;
+          verificationStatus: VerificationStatus;
+        };
+      }
     >({
-      query: ({ id, sourceTarget, reason }) => ({
-        url: `/${sourceTarget}/${id}/${documentTypeResolver(
-          sourceTarget,
-        )}/reject`,
+      query: ({ id, payload }) => ({
+        url: `/admins/${id}/verify-document`,
         method: 'PATCH',
-        body: reason ? { reason } : undefined,
+        body: payload,
       }),
       invalidatesTags: (result, error, { id, sourceTarget }) => [
         { type: 'VerificationDocuments', id: `${sourceTarget}-${id}` },
@@ -93,11 +140,14 @@ export const validDocsApi = createApi({
      */
     delete: builder.mutation<
       { success: boolean },
-      { id: number; sourceTarget: UserRoleType }
+      { id: number; adminId: number; sourceTarget: UserRoleType }
     >({
-      query: ({ id, sourceTarget }) => ({
-        url: `/${sourceTarget}/${documentTypeResolver(sourceTarget)}/${id}`,
+      query: ({ id, adminId }) => ({
+        url: `/admins/${id}/verify-document`,
         method: 'DELETE',
+        body: {
+          adminId: adminId,
+        },
       }),
       invalidatesTags: (result, error, { id, sourceTarget }) => [
         { type: 'VerificationDocuments', id: `${sourceTarget}-${id}` },
@@ -109,7 +159,7 @@ export const validDocsApi = createApi({
 
 export const {
   useGetAllQuery,
-  useApproveMutation,
-  useRejectMutation,
+  useGetOneQuery,
+  usePatchMutation,
   useDeleteMutation,
 } = validDocsApi;

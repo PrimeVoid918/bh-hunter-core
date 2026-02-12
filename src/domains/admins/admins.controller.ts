@@ -29,26 +29,34 @@ export class AdminsController {
     private readonly ownersService: OwnersService,
   ) {}
 
-  @Get()
-  @GetAdminsDoc()
-  findAll(@Query() findAllAdminsDto: FindAdminsDto) {
-    return this.adminsService.findAll(findAllAdminsDto);
+  @Patch(':id/verify-document')
+  updatePermit(
+    @Param('id') permitId: string,
+    @Body()
+    payload: {
+      adminId: number;
+      verificationStatus: VerificationStatus;
+      rejectReason?: string;
+    },
+  ) {
+    return this.adminsService.updatePermit(+permitId, payload);
   }
 
-  @Post()
-  @CreateAdminsDoc()
-  create(@Body() createAdminDto: CreateAdminDto) {
-    return this.adminsService.create(createAdminDto);
+  @Delete(':id/verify-document')
+  removePermit(
+    @Param('id') permitId: string,
+    @Body()
+    payload: { adminId: number },
+  ) {
+    return this.adminsService.removePermit(+permitId, payload);
   }
 
-  @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAdminDto: UpdateAdminDto) {
-    return this.adminsService.update(+id, updateAdminDto);
-  }
-
-  @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.adminsService.remove(+id);
+  @Delete(':adminId/tenants/:tenantId')
+  deleteTenant(
+    @Param('adminId') adminId: string,
+    @Param('tenantId') tenantId: string,
+  ) {
+    return this.adminsService.removeTenant(+adminId, +tenantId);
   }
 
   @Post(':id/owners')
@@ -76,29 +84,35 @@ export class AdminsController {
   ) {
     return this.adminsService.createTenant(+id, createTenantDto);
   }
-  @Get('/tenants')
+  @Get('tenants')
   findAllTenants(@Query() query: FindTenantsDto) {
     return this.tenantsService.findAll({ ...query });
   }
-  @Delete(':adminId/tenants/:tenantId')
-  deleteTenant(
-    @Param('adminId') adminId: string,
-    @Param('tenantId') tenantId: string,
-  ) {
-    return this.adminsService.removeTenant(+adminId, +tenantId);
+
+  @Get()
+  @GetAdminsDoc()
+  findAll(@Query() findAllAdminsDto: FindAdminsDto) {
+    return this.adminsService.findAll(findAllAdminsDto);
+  }
+
+  @Post()
+  @CreateAdminsDoc()
+  create(@Body() createAdminDto: CreateAdminDto) {
+    return this.adminsService.create(createAdminDto);
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateAdminDto: UpdateAdminDto) {
+    return this.adminsService.update(+id, updateAdminDto);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.adminsService.remove(+id);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.adminsService.findOne(+id);
-  }
-
-  @Patch(':id/permits')
-  updatePermit(
-    @Param('id') permitId: string,
-    @Body()
-    payload: { adminId: number; newVerificationStatus: VerificationStatus },
-  ) {
-    return this.adminsService.updatePermit(+permitId, payload);
   }
 }

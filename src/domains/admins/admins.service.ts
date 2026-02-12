@@ -59,6 +59,7 @@ export class AdminsService {
     const prisma = this.prisma;
     return prisma.admin.findUnique({
       where: {
+        isDeleted: false,
         id: id,
       },
     });
@@ -153,7 +154,8 @@ export class AdminsService {
     id: number,
     payload: {
       adminId: number;
-      newVerificationStatus: VerificationStatus;
+      verificationStatus: VerificationStatus;
+      rejectReason?: string;
     },
   ) {
     const prisma = this.prisma;
@@ -185,9 +187,48 @@ export class AdminsService {
     const result = await prisma.verificationDocument.update({
       where: { id },
       data: {
-        verificationStatus: payload.newVerificationStatus,
+        verificationStatus: payload.verificationStatus,
+        rejectionReason: payload.rejectReason,
         approvedAt: new Date(),
         verifiedById: payload.adminId,
+      },
+    });
+
+    return {
+      permitStatus: result.verificationStatus,
+    };
+  }
+
+  async removePermit(
+    id: number,
+    payload: {
+      adminId: number;
+    },
+  ) {
+    const prisma = this.prisma;
+
+    if (!id || isNaN(id)) {
+      throw new BadRequestException('Invalid permit ID');
+    }
+
+    if (!payload || !payload.adminId || isNaN(payload.adminId)) {
+      throw new BadRequestException('Invalid admin ID');
+    }
+
+    // --- check permit exists ---
+    const existingPermit = await prisma.verificationDocument.findUnique({
+      where: { id },
+    });
+
+    if (!existingPermit) {
+      throw new NotFoundException(`Permit with ID ${id} not found`);
+    }
+
+    const result = await prisma.verificationDocument.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        isDeleted: true,
       },
     });
 

@@ -1,223 +1,213 @@
 import React from 'react';
-import { Flex, Box, Text, Button, useDisclosure } from '@chakra-ui/react';
+import { Flex, Box, Text, Button } from '@chakra-ui/react';
 import styled from '@emotion/styled';
 import { PdfViewer } from '@/infrastructure/utils/pdf/PDFViewer.component';
-// import {
-//   useGetOneQuery,
-//   usePatchVerificationDocumentMutation,
-// } from '@/infrastructure/valid-docs/valid-docs.redux.api';
-import AsyncState from '@/features/shared/components/async-state/AsyncState';
+import { ImageViewer } from '@/infrastructure/utils/media/ImageViewer.component';
 import { parseIsoDate } from '@/infrastructure/utils/parseISODate.util';
-import DialogWrapper from '@/features/shared/components/dialog-wrapper/DialogWrapper';
+import AsyncState from '@/features/shared/components/async-state/AsyncState';
+import {
+  VerificationDocumentMetaData,
+  UserRoleType,
+} from '@/infrastructure/documents/documents.type';
+import { useGetOneQuery } from '@/infrastructure/valid-docs/valid-docs.redux.api';
+import DialogWrapper from '../../components/dialog-wrapper/DialogWrapper';
 
-export default function ValidationInfo({ permitId }: { permitId: number }) {
-  // const {
-  //   data: permitData,
-  //   isLoading,
-  //   isError,
-  //   error,
-  // } = useGetOneQuery({
-  //   entityType: 'owners',
-  //   id: permitId,
-  // });
-  const permitData: any = {};
+interface ValidationInfoInterface {
+  thisTableIsFor: string;
+  permitId: number;
+  onApprove: (row: VerificationDocumentMetaData) => void;
+  onReject: (row: VerificationDocumentMetaData, rejectReason: string) => void;
+  onDelete: (row: VerificationDocumentMetaData) => void;
+}
+
+export default function ValidationInfo({
+  permitId,
+  thisTableIsFor,
+  onApprove,
+  onReject,
+  onDelete,
+}: ValidationInfoInterface) {
+  const {
+    data: permitData,
+    isLoading,
+    isError,
+    error,
+  } = useGetOneQuery({
+    userType: thisTableIsFor as UserRoleType,
+    documentId: permitId,
+  });
+
   const permitDateObject = parseIsoDate(permitData?.createdAt);
 
-  // Patch mutation
-  // const [
-  //   patchDocument,
-  //   {
-  //     isLoading: isPatchLoading,
-  //     isError: isPatchError,
-  //     error: patchErrorObj,
-  //     reset,
-  //   },
-  // ] = usePatchVerificationDocumentMutation();
-
-  // Modal controls
-  const { isOpen, onOpen, onClose } = useDisclosure(); // Confirm modal
-  const [resultModalOpen, setResultModalOpen] = React.useState(false);
-  const [resultMessage, setResultMessage] = React.useState<string | null>(null);
-  const [resultIsError, setResultIsError] = React.useState(false);
-  const [actionType, setActionType] = React.useState<'APPROVED' | 'REJECTED'>(
-    'APPROVED',
-  );
-
-  const handleConfirmAction = async () => {
-    if (!permitData) return;
-
-    try {
-      // await patchDocument({
-      //   permitId: permitData.id,
-      //   data: {
-      //     adminId: 1, // or from redux state
-      //     newVerificationStatus: actionType,
-      //   },
-      // }).unwrap();
-
-      setResultMessage(
-        `Document "${permitData.verificationType}" for ${permitData.ownerFullName} has been ${
-          actionType === 'APPROVED' ? 'approved' : 'rejected'
-        }.`,
-      );
-      setResultIsError(false);
-      onClose();
-      setResultModalOpen(true);
-    } catch (err: any) {
-      // Narrow error to server response
-      const serverMessage =
-        err?.data?.message || 'Something went wrong. Please try again.';
-      setResultMessage(serverMessage);
-      setResultIsError(true);
-      setResultModalOpen(true);
-    }
-  };
-
-  const openModalWithAction = (approve: boolean) => {
-    setActionType(approve ? 'APPROVED' : 'REJECTED');
-    // reset?.();
-    onOpen();
-  };
+  const [actionModalOpen, setActionModalOpen] = React.useState(false);
+  const [selectedAction, setSelectedAction] = React.useState<
+    'APPROVE' | 'REJECT' | 'DELETE' | null
+  >(null);
+  const [rejectReason, setRejectReason] = React.useState<string>('');
 
   return (
-    <>
-      <AsyncState
-        //! isLoading={isLoading}
-        isLoading={false}
-        globalOverlay={false}
-        //! isError={isError}
-        isError={false}
-        //! errorObject={error}
-        errorObject={{} as any}
-        errorBody={(err) => {
-          if ('status' in err) {
-            if (err.status >= '500') return <Box>🚨 Server error (500)</Box>;
-            if (err.status >= '400')
-              return (
-                <Box>
-                  ⚠️ Client error ({err.status})
-                  <pre>{JSON.stringify(err.data?.message, null, 2)}</pre>
-                </Box>
-              );
-          }
-          return (
-            <Box color="gray.500">
-              ❓ Unexpected error<pre>{JSON.stringify(err, null, 2)}</pre>
-            </Box>
-          );
-        }}
-      >
-        {permitData && (
-          <BodyContainer>
-            <Box
-              flex="2"
-              bg="gray.50"
-              overflowY="scroll"
-              className="pdf-viewer-container"
-            >
+    <AsyncState
+      isLoading={isLoading}
+      isError={isError}
+      errorObject={error}
+      errorBody={(err) => (
+        <Box color="gray.500">
+          ❓ Unexpected error
+          <pre>{JSON.stringify(err, null, 2)}</pre>
+        </Box>
+      )}
+    >
+      {permitData && (
+        <BodyContainer>
+          {/* Viewer */}
+          <Box
+            flex="2"
+            bg="gray.50"
+            overflowY="scroll"
+            className="pdf-viewer-container"
+          >
+            {permitData.fileFormat === 'PDF' ? (
               <PdfViewer url={permitData.url} />
-            </Box>
+            ) : (
+              <ImageViewer url={permitData.url} />
+            )}
+          </Box>
 
-            <Box
-              flex="1"
-              borderLeft="1px solid"
-              borderColor="gray.200"
-              minHeight={0}
-            >
-              <Flex direction="column" height="100%">
-                {/* Top details */}
-                <Box flex="1" p={4} overflowY="auto" minHeight={0}>
-                  <Text fontWeight="bold">Permit Info</Text>
-                  <Text>ID: {permitData?.id}</Text>
-                  <Text>Owner: {permitData.ownerFullName}</Text>
-                  <Text>Status: {permitData.status}</Text>
-                  <Text>
-                    Created At: {permitDateObject?.dateOnly.toString()}
-                  </Text>
-                </Box>
+          {/* Info Panel */}
+          <Box
+            flex="1"
+            borderLeft="1px solid"
+            borderColor="gray.200"
+            minHeight={0}
+          >
+            <Flex direction="column" height="100%">
+              <Box flex="1" p={4} overflowY="auto" minHeight={0}>
+                <Text fontWeight="bold">Permit Info</Text>
+                <Text>ID: {permitData.id}</Text>
+                <Text>
+                  Owner: {permitData.user.firstname} {permitData.user.lastname}
+                </Text>
+                <Text>Status: {permitData.verificationStatus}</Text>
+                <Text>Created At: {permitDateObject?.dateOnly.toString()}</Text>
+              </Box>
 
-                {/* Bottom actions */}
-                <Box
-                  p={4}
-                  borderTop="1px solid"
-                  borderColor="gray.200"
-                  display="flex"
-                  gap={2}
-                  justifyContent="flex-end"
-                  flexShrink={0}
-                >
+              <Box
+                p={4}
+                borderTop="1px solid"
+                borderColor="gray.200"
+                display="flex"
+                gap={2}
+                justifyContent="flex-end"
+                flexShrink={0}
+              >
+                {permitData.verificationStatus == 'PENDING' ? (
+                  <>
+                    {' '}
+                    <Button
+                      colorScheme="green"
+                      onClick={() => {
+                        setSelectedAction('APPROVE');
+                        setActionModalOpen(true);
+                      }}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      colorScheme="red"
+                      onClick={() => {
+                        setSelectedAction('REJECT');
+                        setActionModalOpen(true);
+                      }}
+                    >
+                      Reject
+                    </Button>
+                  </>
+                ) : (
                   <Button
                     colorScheme="green"
-                    onClick={() => openModalWithAction(true)}
+                    onClick={() => {
+                      setSelectedAction('DELETE');
+                      setActionModalOpen(true);
+                    }}
                   >
-                    Approve
+                    Delete
                   </Button>
-                  <Button
-                    colorScheme="red"
-                    onClick={() => openModalWithAction(false)}
-                  >
-                    Reject
-                  </Button>
-                </Box>
-              </Flex>
-            </Box>
-          </BodyContainer>
-        )}
-      </AsyncState>
-
-      {/* Confirm Modal */}
-      {permitData && (
-        <DialogWrapper
-          isOpen={isOpen}
-          onClose={onClose}
-          header={`${actionType === 'APPROVED' ? 'Approve' : 'Reject'} Document`}
-          chakraStyling={{
-            w: { base: '90vw', md: '40rem' },
-            maxH: { base: '80vh', md: '60vh' },
-            overflowY: 'auto',
-          }}
-          footer={
-            <Flex justify="space-between" w="100%">
-              <Button onClick={onClose}>Cancel</Button>
-              <Button
-                colorScheme={actionType === 'APPROVED' ? 'green' : 'red'}
-                onClick={handleConfirmAction}
-                isLoading={false}
-                //! isLoading={isPatchLoading}
-              >
-                {actionType === 'APPROVED' ? 'Approve' : 'Reject'}
-              </Button>
+                )}
+              </Box>
             </Flex>
-          }
-        >
-          <Box p={4}>
-            Are you sure you want to{' '}
-            {actionType === 'APPROVED' ? 'approve' : 'reject'} document "
-            {permitData.verificationType}" for {permitData.ownerFullName}?
           </Box>
-        </DialogWrapper>
-      )}
+          <DialogWrapper
+            isOpen={actionModalOpen}
+            onClose={() => setActionModalOpen(false)}
+            header={
+              selectedAction === 'DELETE'
+                ? 'Confirm Deletion'
+                : selectedAction === 'APPROVE'
+                  ? 'Confirm Approval'
+                  : 'Confirm Rejection'
+            }
+            footer={
+              <Flex justify="flex-end" gap={2} w="100%">
+                <Button onClick={() => setActionModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  colorScheme={selectedAction === 'APPROVE' ? 'green' : 'red'}
+                  onClick={() => {
+                    if (!permitData) return;
 
-      {/* Success Modal */}
-      {resultModalOpen && permitData && (
-        <DialogWrapper
-          isOpen={resultModalOpen}
-          onClose={() => setResultModalOpen(false)}
-          header={resultIsError ? 'Action Failed' : 'Action Successful'}
-          chakraStyling={{
-            w: { base: '90vw', md: '40rem' },
-            maxH: { base: '80vh', md: '80vh' },
-          }}
-          footer={
-            <Button onClick={() => setResultModalOpen(false)}>Close</Button>
-          }
-        >
-          <Box color={resultIsError ? 'red.500' : 'green.500'} p={2}>
-            {resultMessage}
-          </Box>
-        </DialogWrapper>
+                    if (selectedAction === 'APPROVE') {
+                      onApprove(permitData);
+                    } else if (selectedAction === 'REJECT') {
+                      onReject({ ...permitData }, rejectReason);
+                    } else if (selectedAction === 'DELETE') {
+                      onDelete({ ...permitData });
+                    }
+
+                    setActionModalOpen(false);
+                    setRejectReason('');
+                    setSelectedAction(null);
+                  }}
+                >
+                  {selectedAction === 'DELETE'
+                    ? 'Deletion'
+                    : selectedAction === 'APPROVE'
+                      ? 'Approval'
+                      : 'Rejection'}
+                </Button>
+              </Flex>
+            }
+          >
+            <Box p={4}>
+              Are you sure you want to{' '}
+              {selectedAction === 'DELETE'
+                ? 'deletion'
+                : selectedAction === 'APPROVE'
+                  ? 'approval'
+                  : 'rejection'}{' '}
+              {permitData?.verificationType} for {permitData?.user.firstname}{' '}
+              {permitData?.user.lastname}?
+              {selectedAction === 'REJECT' && (
+                <Box mt={4}>
+                  <Text mb={1}>Reject Reason (optional)</Text>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    style={{
+                      width: '100%',
+                      minHeight: '80px',
+                      borderRadius: '0.25rem',
+                      padding: '0.5rem',
+                      borderColor: '#ccc',
+                    }}
+                  />
+                </Box>
+              )}
+            </Box>
+          </DialogWrapper>
+        </BodyContainer>
       )}
-    </>
+    </AsyncState>
   );
 }
 
@@ -241,6 +231,7 @@ const BodyContainer = styled(Flex)`
   .pdf-viewer-container {
     padding: 1rem;
     background-color: transparent !important;
+
     &::-webkit-scrollbar {
       display: none !important;
       scrollbar-width: none !important;

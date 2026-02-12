@@ -2,18 +2,19 @@ import React from 'react';
 import { Button, Flex, useDisclosure } from '@chakra-ui/react';
 import { VerificationDocumentMetaData } from '@/infrastructure/documents/documents.type';
 import ModalWrapper from '@/features/shared/components/modal-wrapper/ModalWrapper';
-import DialogWrapper from '@/features/shared/components/dialog-wrapper/DialogWrapper';
 import ValidationInfo from './ValidationInfo';
 
 interface Props {
   rowData: VerificationDocumentMetaData;
+  thisTableIsFor: string;
   onApprove: (row: VerificationDocumentMetaData) => void;
-  onReject: (row: VerificationDocumentMetaData) => void;
+  onReject: (row: VerificationDocumentMetaData, rejectReason: string) => void;
   onDelete: (row: VerificationDocumentMetaData) => void;
 }
 
 export default function ValidationTableRowActionsConfig({
   rowData,
+  thisTableIsFor,
   onApprove,
   onReject,
   onDelete,
@@ -39,7 +40,13 @@ export default function ValidationTableRowActionsConfig({
 
       {isOpen && (
         <ModalWrapper isOpen={isOpen} onClose={onClose} showCloseButton>
-          <ValidationInfo permitId={rowData.id} />
+          <ValidationInfo
+            onApprove={onApprove}
+            onReject={onReject}
+            onDelete={onDelete}
+            permitId={rowData.id}
+            thisTableIsFor={thisTableIsFor}
+          />
         </ModalWrapper>
       )}
     </>
