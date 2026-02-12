@@ -329,37 +329,31 @@ export class PaymentsService {
     const resource = payload?.data?.attributes?.data;
     const resourceAttributes = resource?.attributes;
 
+    if (!eventType || !resourceAttributes) {
+      return { ignored: true };
+    }
+
+    const metadata = resourceAttributes?.metadata;
+    const internalPaymentId = metadata?.paymentId;
+
+    if (!internalPaymentId) {
+      console.log('Webhook ignored: no metadata.paymentId');
+      return { ignored: true };
+    }
+
+    let payment = await this.prisma.payment.findUnique({
+      where: { id: Number(internalPaymentId) },
+    });
+
+    if (!payment) {
+      console.log('Webhook ignored: payment not found', internalPaymentId);
+      return { ignored: true };
+    }
+
     const intent =
       resourceAttributes?.payment_intent_id ||
       resourceAttributes?.payment_intent?.id;
 
-    const link =
-      resourceAttributes?.payment_link_id ||
-      resourceAttributes?.payment_link?.id;
-
-    if (!intent && !link) {
-      return { ignored: true }; // do NOT throw 400
-    }
-
-    // 1️⃣ Try find by intent first
-    let payment = intent
-      ? await this.prisma.payment.findFirst({
-          where: { providerPaymentIntentId: intent },
-        })
-      : null;
-
-    // 2️⃣ Fallback → find by link
-    if (!payment && link) {
-      payment = await this.prisma.payment.findFirst({
-        where: { providerPaymentLinkId: link },
-      });
-    }
-
-    if (!payment) {
-      return { ignored: true };
-    }
-
-    // 3️⃣ If found via link, save intent now
     if (intent && !payment.providerPaymentIntentId) {
       payment = await this.prisma.payment.update({
         where: { id: payment.id },
@@ -367,7 +361,6 @@ export class PaymentsService {
       });
     }
 
-    // Idempotency guard
     if (payment.status === PaymentStatus.PAID) {
       return { ignored: true };
     }
