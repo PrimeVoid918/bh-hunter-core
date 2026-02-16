@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  forwardRef,
   HttpException,
   Inject,
   Injectable,
@@ -29,6 +30,7 @@ import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-
 import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.exceptions';
 import { UpdateVerifcationDto } from '../verifications/dto/update-verifcation.dto';
 import { FindOneVerificationDto } from '../verifications/dto/findOne-verification.dto';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class TenantsService {
@@ -36,6 +38,8 @@ export class TenantsService {
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly imageService: ImageService,
     private readonly verificationService: VerifcationService,
+    @Inject(forwardRef(() => AuthService))
+    private readonly authService: AuthService,
     private readonly logger: Logger,
   ) {}
 
@@ -69,7 +73,7 @@ export class TenantsService {
           email: true,
           role: true,
           isActive: true,
-          isVerified: true,
+          // isVerified: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -97,7 +101,7 @@ export class TenantsService {
         email: true,
         role: true,
         isActive: true,
-        isVerified: true,
+        // isVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -190,21 +194,29 @@ export class TenantsService {
     );
 
     try {
-      // Check if tenant exists
-      const existingTenant = await this.prisma.tenant.findUnique({
-        where: { id },
-      });
-      if (!existingTenant)
-        throw new NotFoundException(`Tenant with id ${id} not found`);
+      return this.prisma.$transaction(async (tx) => {
+        const existingTenant = await tx.tenant.findUnique({
+          where: { id },
+        });
 
-      // Perform update
-      const updatedTenant = await this.prisma.tenant.update({
-        where: { id },
-        data: dataToUpdate,
-      });
+        if (!existingTenant) {
+          throw new NotFoundException(`Tenant with id ${id} not found`);
+        }
 
-      return updatedTenant;
-    } catch (error: any) {
+        const updatedTenant = await tx.tenant.update({
+          where: { id },
+          data: dataToUpdate,
+        });
+
+        await this.authService.recomputeVerificationLevel(
+          id,
+          UserRole.TENANT,
+          tx,
+        );
+
+        return updatedTenant;
+      });
+    } catch (error: unknown) {
       if (isPrismaErrorCode(error, 'P2002')) {
         throw new ConflictException('Username or email already exists');
       }
@@ -389,7 +401,7 @@ export class TenantsService {
     // 3️⃣ Transaction + creation
     try {
       const id = await this.prisma.$transaction(async (tx) => {
-        return await this.verificationService.create(
+        const createdId = await this.verificationService.create(
           tx,
           file,
           UserRole.TENANT,
@@ -397,16 +409,24 @@ export class TenantsService {
             type: 'TENANT',
             targetId: userId,
             mediaType: MediaType.VALID_ID,
-            childId: 0, //! this needs to be fixed
+            childId: 0,
           },
           {
             userId,
-            type: type,
+            type,
             expiresAt: expiresAt.toString(),
-            fileFormat: fileFormat,
+            fileFormat,
           },
           false,
         );
+
+        await this.authService.recomputeVerificationLevel(
+          userId,
+          UserRole.TENANT,
+          tx,
+        );
+
+        return createdId;
       });
 
       if (!id) {
@@ -432,83 +452,82 @@ export class TenantsService {
     payload: UpdateVerifcationDto,
     file: Express.Multer.File,
   ) {
-    const prisma = this.prisma;
-
-    const verificationDocumentTenantID =
-      await prisma.verificationDocument.findUnique({
+    return this.prisma.$transaction(async (tx) => {
+      const verificationDocument = await tx.verificationDocument.findUnique({
         where: { id: verificationDocumentId },
-        select: { userId: true, userType: true },
+        select: { userId: true },
       });
 
-    const searchTenant = await prisma.tenant.findUnique({
-      where: { id: verificationDocumentTenantID?.userId },
+      if (!verificationDocument) {
+        throw new NotFoundException(
+          `Verification Document ${verificationDocumentId} not found`,
+        );
+      }
+
+      const tenant = await tx.tenant.findUnique({
+        where: { id: verificationDocument.userId },
+      });
+
+      if (!tenant) {
+        throw new NotFoundException(
+          `Tenant ${verificationDocument.userId} not found`,
+        );
+      }
+
+      const updated = await this.verificationService.updateVerificationDocument(
+        tx,
+        verificationDocumentId,
+        file,
+        {
+          type: 'TENANT',
+          targetId: verificationDocument.userId,
+          mediaType: MediaType.VALID_ID,
+          childId: 0,
+        },
+        {
+          expiresAt: payload.expiresAt,
+          type: payload.type,
+        },
+        false,
+      );
+
+      await this.authService.recomputeVerificationLevel(
+        verificationDocument.userId,
+        UserRole.TENANT,
+        tx,
+      );
+
+      return updated;
     });
-
-    if (!verificationDocumentTenantID) {
-      throw new NotFoundException(
-        `Verification Document ${verificationDocumentId} not found`,
-      );
-    }
-
-    if (!searchTenant) {
-      throw new NotFoundException(
-        `User ${verificationDocumentId} Verification Document does not exist, ${searchTenant}`,
-      );
-    }
-
-    return await this.verificationService.updateVerificationDocument(
-      prisma,
-      verificationDocumentId,
-      file,
-      {
-        type: 'TENANT',
-        //! so it was +verificationDocumentTenantID but object cant coerce with number returns NAN bug
-        targetId: verificationDocumentTenantID.userId,
-        mediaType: MediaType.VALID_ID,
-        childId: 0, //! this needs fixing
-      },
-      {
-        expiresAt: payload.expiresAt,
-        type: payload.type,
-      },
-      false,
-    );
   }
 
-  async getVerificationStatus(
-    tenantId: number,
-    // payload: FindOneVerificationDto,
-  ) {
-    const requiredVerificationDocuments = [VerificationType.VALID_ID];
+  async getVerificationStatus(tenantId: number) {
+    await this.authService.recomputeVerificationLevel(
+      tenantId,
+      UserRole.TENANT,
+    );
 
-    const tenant = await this.prisma.verificationDocument.findMany({
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: tenantId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    const documents = await this.prisma.verificationDocument.findMany({
       where: {
         isDeleted: false,
         userId: tenantId,
-        userType: 'TENANT',
-      },
-    });
-
-    const missingVerificationDocuments = requiredVerificationDocuments.filter(
-      (type) => !tenant.some((p) => p.verificationType === type),
-    ) as VerificationType[];
-
-    const verified =
-      tenant.length > 0 &&
-      missingVerificationDocuments.length === 0 &&
-      tenant.every((doc) => doc.verificationStatus === 'APPROVED');
-
-    await this.prisma.tenant.update({
-      where: { id: tenantId },
-      data: {
-        isVerified: verified,
+        userType: UserRole.TENANT,
       },
     });
 
     return {
-      verified,
-      missingVerificationDocuments,
-      verificationDocuments: tenant.map((p) => ({
+      verified: tenant.verificationLevel === 'FULLY_VERIFIED',
+      registrationStatus: tenant.registrationStatus,
+      verificationLevel: tenant.verificationLevel,
+      verificationDocuments: documents.map((p) => ({
         id: p.id,
         verificationType: p.verificationType,
         verificationStatus: p.verificationStatus,
@@ -527,22 +546,27 @@ export class TenantsService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      // Get Verification Document to find the filePath/url
-      const verificationDocuments = await tx.verificationDocument.findFirst({
+      const verificationDocument = await tx.verificationDocument.findFirst({
         where: { id: verificationDocumentId },
       });
-      if (!verificationDocuments) {
+
+      if (!verificationDocument) {
         throw new NotFoundException(
           `Verification Document ${verificationDocumentId} not found`,
         );
       }
 
-      // Delete verificaiton document file + db record atomically as possible
       await this.verificationService.deleteVerificationDocument(
         tx,
         verificationDocumentId,
-        verificationDocuments.url,
+        verificationDocument.url,
         false,
+      );
+
+      await this.authService.recomputeVerificationLevel(
+        tenantId,
+        UserRole.TENANT,
+        tx,
       );
 
       return { success: true };
@@ -552,12 +576,14 @@ export class TenantsService {
   async remove(id: number) {
     const prisma = this.prisma;
 
-    const entity = await prisma.owner.findUnique({ where: { id } });
-    if (!entity) throw new NotFoundException(`Owner with id ${id} not found`);
-    if (entity.isDeleted)
-      throw new NotFoundException(`Owner with id ${id} is already deleted`);
+    const entity = await prisma.tenant.findUnique({ where: { id } });
 
-    const deletedOwner = await prisma.owner.update({
+    if (!entity) throw new NotFoundException(`Tenant with id ${id} not found`);
+
+    if (entity.isDeleted)
+      throw new NotFoundException(`Tenant with id ${id} is already deleted`);
+
+    const deletedTenant = await prisma.tenant.update({
       where: { id },
       data: {
         isDeleted: true,
@@ -565,7 +591,7 @@ export class TenantsService {
       },
     });
 
-    const { password, ...safeOwner } = deletedOwner;
-    return safeOwner;
+    const { password, ...safeTenant } = deletedTenant;
+    return safeTenant;
   }
 }

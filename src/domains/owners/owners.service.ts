@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
   HttpException,
   ConflictException,
+  forwardRef,
 } from '@nestjs/common';
 import { CreateOwnerDto } from './dto/create-owner.dto';
 import { UpdateOwnerDto } from './dto/update-owner.dto';
@@ -24,12 +25,15 @@ import { UpdateVerifcationDto } from 'src/domains/verifications/dto/update-verif
 import { Logger } from 'src/common/logger/logger.service';
 import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.exceptions';
 import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-validation.utils';
+import { AuthService } from '../auth/auth.service';
 
 @Injectable()
 export class OwnersService {
   constructor(
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly verificationService: VerifcationService,
+    @Inject(forwardRef(() => AuthService)) // <--- ADD THIS
+    private readonly authService: AuthService,
     private readonly logger: Logger,
   ) {}
 
@@ -68,7 +72,7 @@ export class OwnersService {
         email: true,
         role: true,
         isActive: true,
-        isVerified: true,
+        // isVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -94,7 +98,8 @@ export class OwnersService {
         password: true,
         role: true,
         isActive: true,
-        isVerified: true,
+        registrationStatus: true,
+        verificationLevel: true,
         createdAt: true,
         updatedAt: true,
         age: true,
@@ -139,6 +144,7 @@ export class OwnersService {
   }
 
   async create(dto: CreateOwnerDto) {
+    //! enable on prod
     // const hashedPassword = await bcrypt.hash(dto.password, 10);
     try {
       return await this.prisma.owner.create({
@@ -187,7 +193,7 @@ export class OwnersService {
       throw new BadRequestException('UserId must be provided');
     }
 
-    // 🔹 Quick check: does the owner exist?
+    //🔹 Quick🔹 check: does the owner exist?
     const ownerExists = await this.prisma.owner.findUnique({
       where: { id: userId },
     });
@@ -223,6 +229,8 @@ export class OwnersService {
           'Failed to create verification document',
         );
       }
+
+      await this.authService.recomputeVerificationLevel(userId, UserRole.OWNER);
 
       return id;
     } catch (error: unknown) {
@@ -265,22 +273,44 @@ export class OwnersService {
       );
     }
 
-    return await this.verificationService.updateVerificationDocument(
-      prisma,
-      verificationDocumentId,
-      file,
-      {
-        type: 'OWNER',
-        //! so it was +verificationDocumentOwnerID but object cant coerce with number returns NAN bug
-        targetId: verificationDocumentOwnerID.userId,
-        mediaType: MediaType.DOCUMENT,
-      },
-      {
-        expiresAt: payload.expiresAt,
-        type: payload.type,
-      },
-      false,
-    );
+    return this.prisma.$transaction(async (tx) => {
+      const verificationDocumentOwnerID =
+        await tx.verificationDocument.findUnique({
+          where: { id: verificationDocumentId },
+          select: { userId: true, userType: true },
+        });
+
+      if (!verificationDocumentOwnerID) {
+        throw new NotFoundException(
+          `Verification Document ${verificationDocumentId} not found`,
+        );
+      }
+
+      const updateVerification =
+        await this.verificationService.updateVerificationDocument(
+          tx,
+          verificationDocumentId,
+          file,
+          {
+            type: 'OWNER',
+            targetId: verificationDocumentOwnerID.userId,
+            mediaType: MediaType.DOCUMENT,
+          },
+          {
+            expiresAt: payload.expiresAt,
+            type: payload.type,
+          },
+          false,
+        );
+
+      await this.authService.recomputeVerificationLevel(
+        verificationDocumentOwnerID.userId,
+        UserRole.OWNER,
+        tx,
+      );
+
+      return updateVerification;
+    });
   }
 
   async findAllVerificationDocument() {
@@ -339,41 +369,30 @@ export class OwnersService {
   }
 
   async getVerificationStatus(ownerId: number) {
-    const requiredVerificationDocuments = [
-      VerificationType.DTI,
-      VerificationType.BIR,
-      VerificationType.FIRE_CERTIFICATE,
-      VerificationType.SANITARY_PERMIT,
-      VerificationType.SEC,
-    ];
+    // recompute first (ensures state is correct)
+    await this.authService.recomputeVerificationLevel(ownerId, UserRole.OWNER);
 
-    const owner = await this.prisma.verificationDocument.findMany({
-      where: {
-        userId: ownerId,
-        userType: 'OWNER',
-      },
+    const owner = await this.prisma.owner.findUnique({
+      where: { id: ownerId },
     });
 
-    const missingVerificationDocuments = requiredVerificationDocuments.filter(
-      (type) => !owner.some((p) => p.verificationType === type),
-    ) as VerificationType[];
+    if (!owner) {
+      throw new NotFoundException('Owner not found');
+    }
 
-    const verified =
-      owner.length > 0 && // must have at least one document
-      missingVerificationDocuments.length === 0 && // no missing documents
-      owner.every((doc) => doc.verificationStatus === 'APPROVED');
-
-    await this.prisma.owner.update({
-      where: { id: ownerId },
-      data: {
-        isVerified: verified,
+    const documents = await this.prisma.verificationDocument.findMany({
+      where: {
+        isDeleted: false,
+        userId: ownerId,
+        userType: UserRole.OWNER,
       },
     });
 
     return {
-      verified,
-      missingVerificationDocuments, // 👈 machine-readable enums
-      verificationDocuments: owner.map((p) => ({
+      verified: owner.verificationLevel === 'FULLY_VERIFIED', // 👈 backward compatibility
+      registrationStatus: owner.registrationStatus,
+      verificationLevel: owner.verificationLevel,
+      verificationDocuments: documents.map((p) => ({
         id: p.id,
         verificationType: p.verificationType,
         verificationStatus: p.verificationStatus,
@@ -494,31 +513,45 @@ export class OwnersService {
         false,
       );
 
+      await this.authService.recomputeVerificationLevel(
+        ownerId,
+        UserRole.OWNER,
+        tx,
+      );
+
       return { success: true };
     });
   }
+
   async update(id: number, updateOwnerDto: UpdateOwnerDto) {
     if (!id) throw new BadRequestException('Id is required');
 
-    // 1️⃣ Filter out undefined fields and remove unwanted relational keys
     const { boardingHouses, ...dataToUpdate } = Object.fromEntries(
       Object.entries(updateOwnerDto).filter(([_, v]) => v !== undefined),
     );
 
-    // 2️⃣ Hash password if included
-    if (dataToUpdate.password) {
-      const bcrypt = await import('bcrypt');
-      dataToUpdate.password = await bcrypt.hash(dataToUpdate.password, 10);
-    }
+    //! enable on prod
+    // if (dataToUpdate.password) {
+    //   const bcrypt = await import('bcrypt');
+    //   dataToUpdate.password = await bcrypt.hash(dataToUpdate.password, 10);
+    // }
 
     try {
-      const updatedOwner = await this.prisma.owner.update({
-        where: { id },
-        data: dataToUpdate,
-      });
+      return this.prisma.$transaction(async (tx) => {
+        const updatedOwner = await tx.owner.update({
+          where: { id },
+          data: dataToUpdate,
+        });
 
-      const { password, ...safeOwner } = updatedOwner;
-      return safeOwner;
+        await this.authService.recomputeVerificationLevel(
+          id,
+          UserRole.OWNER,
+          tx,
+        );
+
+        const { password, ...safeOwner } = updatedOwner;
+        return safeOwner;
+      });
     } catch (error: unknown) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&

@@ -1,15 +1,28 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { UserUnionService } from './userUnion.service';
 import { CryptoService } from './utilities/crypto.service';
 import { JwtService } from '@nestjs/jwt'; // ** not a custom Service but built in
+import { REQUIRED_DOCUMENTS } from './auth.types';
+import { Prisma, UserRole, VerificationLevel } from '@prisma/client';
+import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 
 @Injectable()
 export class AuthService {
   constructor(
+    @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly userUnionService: UserUnionService,
     private readonly cryptoService: CryptoService,
     private readonly jtwService: JwtService,
   ) {}
+
+  private get prisma() {
+    return this.database.getClient();
+  }
 
   async validateUser(username: string, password: string) {
     const result = await this.userUnionService.findUserByUsername(username);
@@ -20,6 +33,7 @@ export class AuthService {
 
     const { user, type } = result;
 
+    //! enable on prod
     // const isPasswordValid = await this
     // TODO: implement password validation helper
     // * use cryptoService for comparing hashed and normal password
@@ -78,6 +92,108 @@ export class AuthService {
       // access_token: this.jtwService.(payload),
       user: filter,
     };
+  }
+
+  async getVerificationStatus(userId: number, role: UserRole) {
+    const user =
+      role === 'TENANT'
+        ? await this.prisma.tenant.findUnique({ where: { id: userId } })
+        : await this.prisma.owner.findUnique({ where: { id: userId } });
+
+    if (!user) throw new NotFoundException();
+
+    const documents = await this.prisma.verificationDocument.findMany({
+      where: {
+        isDeleted: false,
+        userId,
+        userType: role,
+      },
+    });
+
+    return {
+      registrationStatus: user.registrationStatus,
+      verificationLevel: user.verificationLevel,
+      verificationDocuments: documents,
+    };
+  }
+
+  async recomputeVerificationLevel(
+    userId: number,
+    role: UserRole,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const prisma = tx ?? this.prisma;
+
+    const requiredDocs = REQUIRED_DOCUMENTS[role];
+
+    const documents = await prisma.verificationDocument.findMany({
+      where: {
+        isDeleted: false,
+        userId,
+        userType: role,
+      },
+    });
+
+    const hasAllRequiredDocs = requiredDocs.every((type) =>
+      documents.some(
+        (doc) =>
+          doc.verificationType === type &&
+          doc.verificationStatus === 'APPROVED',
+      ),
+    );
+
+    const user =
+      role === UserRole.TENANT
+        ? await prisma.tenant.findUnique({ where: { id: userId } })
+        : await prisma.owner.findUnique({ where: { id: userId } });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    const profileComplete = this.isProfileComplete(user);
+
+    let verificationLevel: VerificationLevel;
+
+    if (!profileComplete) {
+      verificationLevel = VerificationLevel.UNVERIFIED;
+    } else if (!hasAllRequiredDocs) {
+      verificationLevel = VerificationLevel.PROFILE_ONLY;
+    } else {
+      verificationLevel = VerificationLevel.FULLY_VERIFIED;
+    }
+
+    const registrationStatus = profileComplete ? 'COMPLETED' : 'PENDING';
+
+    if (role === UserRole.TENANT) {
+      await prisma.tenant.update({
+        where: { id: userId },
+        data: { verificationLevel, registrationStatus },
+      });
+    } else {
+      await prisma.owner.update({
+        where: { id: userId },
+        data: { verificationLevel, registrationStatus },
+      });
+    }
+
+    return verificationLevel;
+  }
+
+  private isProfileComplete(user: any): boolean {
+    const requiredFields = [
+      'firstname',
+      'lastname',
+      'address',
+      'age',
+      'phone_number',
+    ];
+
+    return requiredFields.every(
+      (field) =>
+        user[field] !== null &&
+        user[field] !== undefined &&
+        user[field] !== '' &&
+        user[field] !== 0,
+    );
   }
 }
 

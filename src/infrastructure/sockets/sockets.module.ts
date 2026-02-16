@@ -17,6 +17,8 @@ import { Logger } from 'src/common/logger/logger.service';
 import { FileOpsUtils } from '../shared/utils/file-ops.utls';
 import { MediaPathBuilderUtil } from '../shared/utils/media-path-builder.util';
 import { DocumentService } from '../document/document.service';
+import { AuthService } from 'src/domains/auth/auth.service';
+import { CryptoService } from 'src/domains/auth/utilities/crypto.service';
 
 @Global() // Making it global allows any domain to inject the Gateway easily
 @Module({
@@ -35,6 +37,8 @@ import { DocumentService } from '../document/document.service';
     DocumentService,
     RpsService,
     SocketGateway,
+    AuthService,
+    CryptoService,
     {
       provide: 'BASE_DIR',
       useValue: 'media', // or your base directory path

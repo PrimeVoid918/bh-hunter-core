@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  forwardRef,
   Inject,
   Injectable,
   NotFoundException,
@@ -24,7 +25,9 @@ import { CreateOwnerDto } from '../owners/dto/create-owner.dto';
 export class AdminsService {
   constructor(
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
+    @Inject(forwardRef(() => TenantsService))
     private readonly tenantsService: TenantsService,
+    @Inject(forwardRef(() => OwnersService))
     private readonly ownersService: OwnersService,
   ) {}
 

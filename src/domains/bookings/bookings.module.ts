@@ -15,6 +15,9 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
 import { PaymongoService } from '../payments/strategies/paymongo/paymongo.service';
+import { AuthService } from '../auth/auth.service';
+import { CryptoService } from '../auth/utilities/crypto.service';
+import { JwtService } from '@nestjs/jwt';
 
 @Module({
   imports: [],
@@ -42,6 +45,9 @@ import { PaymongoService } from '../payments/strategies/paymongo/paymongo.servic
     },
     DocumentService,
     EventEmitter2,
+    AuthService,
+    CryptoService,
+    JwtService,
   ],
   exports: ['PAYMENT_PROVIDER'],
 })

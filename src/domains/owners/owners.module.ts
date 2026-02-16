@@ -8,6 +8,13 @@ import { DocumentService } from 'src/infrastructure/document/document.service';
 import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path-builder.util';
 import { FileOpsUtils } from 'src/infrastructure/shared/utils/file-ops.utls';
 import { Logger } from 'src/common/logger/logger.service';
+import { AuthService } from '../auth/auth.service';
+import { UserUnionService } from '../auth/userUnion.service';
+import { CryptoService } from '../auth/utilities/crypto.service';
+import { JwtService } from '@nestjs/jwt';
+import { TenantsService } from '../tenants/tenants.service';
+import { AdminsService } from '../admins/admins.service';
+import { ImageService } from 'src/infrastructure/image/image.service';
 
 @Module({
   imports: [VerifcationModule, DocumentModule],
@@ -23,6 +30,13 @@ import { Logger } from 'src/common/logger/logger.service';
       useValue: 'media', // or your base directory path
     },
     Logger,
+    AuthService,
+    UserUnionService,
+    CryptoService,
+    JwtService,
+    TenantsService,
+    AdminsService,
+    ImageService,
   ],
   exports: [OwnersService],
 })

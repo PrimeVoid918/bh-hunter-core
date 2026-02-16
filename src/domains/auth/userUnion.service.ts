@@ -1,14 +1,16 @@
 import { AdminsService } from 'src/domains/admins/admins.service';
 import { TenantsService } from '../tenants/tenants.service';
-import { Injectable } from '@nestjs/common';
+import { forwardRef, Inject, Injectable } from '@nestjs/common';
 import { OwnersService } from 'src/domains/owners/owners.service';
 
 @Injectable()
 export class UserUnionService {
   constructor(
-    private readonly tenantService: TenantsService,
     private readonly adminService: AdminsService,
+    @Inject(forwardRef(() => OwnersService)) // <--- ADD THIS
     private readonly ownerService: OwnersService,
+    @Inject(forwardRef(() => TenantsService)) // <--- ADD THIS
+    private readonly tenantService: TenantsService,
   ) {}
 
   async findUserByUsername(username: string) {

@@ -101,6 +101,17 @@ enum UserRole {
   ADMIN
 }
 
+enum RegistrationStatus {
+  PENDING
+  COMPLETED
+}
+
+enum VerificationLevel {
+  UNVERIFIED // profile incomplete OR no documents
+  PROFILE_ONLY // profile complete but no approved docs
+  FULLY_VERIFIED // profile complete + docs approved
+}
+
 enum ResourceType {
   TENANT
   OWNER
@@ -180,7 +191,8 @@ model Tenant {
   hasAcceptedLegitimacyConsent Boolean                @default(false)
   consentAcceptedAt            DateTime?
   isActive                     Boolean                @default(true)
-  isVerified                   Boolean                @default(false)
+  registrationStatus           RegistrationStatus     @default(PENDING)
+  verificationLevel            VerificationLevel      @default(UNVERIFIED)
   createdAt                    DateTime               @default(now())
   updatedAt                    DateTime               @updatedAt
   age                          Int?                   @default(0)
@@ -205,7 +217,8 @@ model Owner {
   hasAcceptedLegitimacyConsent Boolean                @default(false)
   consentAcceptedAt            DateTime?
   isActive                     Boolean                @default(true)
-  isVerified                   Boolean                @default(false)
+  registrationStatus           RegistrationStatus     @default(PENDING)
+  verificationLevel            VerificationLevel      @default(UNVERIFIED)
   createdAt                    DateTime               @default(now())
   updatedAt                    DateTime               @updatedAt
   age                          Int?                   @default(0)
