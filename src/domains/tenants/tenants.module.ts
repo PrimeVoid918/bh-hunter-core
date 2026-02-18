@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { TenantsController } from './tenants.controller';
 import { ImageModule } from 'src/infrastructure/image/image.module';
-import { VerifcationModule } from '../verifications/verification.module';
+import { VerificationModule } from '../verifications/verification.module';
 import { VerifcationService } from '../verifications/verification.service';
 import { DocumentService } from 'src/infrastructure/document/document.service';
 import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path-builder.util';
@@ -14,11 +14,15 @@ import { CryptoService } from '../auth/utilities/crypto.service';
 import { JwtService } from '@nestjs/jwt';
 import { AdminsService } from '../admins/admins.service';
 import { OwnersService } from '../owners/owners.service';
+import { AdminsPublisher } from '../admins/events/admins.publisher';
+import { AccountsPublisher } from '../accounts/accounts.publisher';
 
 @Module({
-  imports: [VerifcationModule, ImageModule],
+  imports: [VerificationModule, ImageModule],
   controllers: [TenantsController],
   providers: [
+    AccountsPublisher,
+    AdminsPublisher,
     TenantsService,
     VerifcationService,
     DocumentService,

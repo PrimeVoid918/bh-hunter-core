@@ -6,15 +6,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
-import { Booking, BookingStatus, MediaType } from '@prisma/client';
+import {
+  BookingStatus,
+  MediaType,
+  ResourceType as PrismaResourceType,
+  Prisma,
+} from '@prisma/client';
 
 import {
   CreateBookingDto,
   PatchTenantBookDto,
   PatchApprovePayloadDTO,
   PatchBookingRejectionPayloadDTO,
-  CreatePaymentProofDTO,
-  PatchVerifyPaymentDto,
   FindAllBookingFilterDto,
   CancelBookingDto,
 } from './dto/dtos';
@@ -73,7 +76,7 @@ export class BookingsService {
 
     await this.prisma.booking.update({
       where: { id: bookingResult.id },
-      data: { status: BookingStatus.AWAITING_PAYMENT },
+      data: { status: BookingStatus.PENDING_REQUEST },
     });
 
     this.bookingEventPublisher.requested({
@@ -83,36 +86,18 @@ export class BookingsService {
         firstname: bookingResult.tenant.firstname,
         lastname: bookingResult.tenant.lastname,
       },
+      data: {
+        ownerId: room.boardingHouse.ownerId,
+        tenantId: bookingResult.tenantId,
+        roomId: room.id,
+        bhId: room.boardingHouseId,
+        resourceType: PrismaResourceType.BOOKING,
+      },
       ownerId: room.boardingHouse.ownerId,
       roomId: roomId,
       boardingHouseId: room.boardingHouseId,
     });
-
-    //! booking process wrong, needs fixing
-    let payment: { paymentId: number; clientSecret: string } | null = null;
-    try {
-      payment = await this.paymentService.createBookingPayment({
-        bookingId: bookingResult.id,
-        tenantId: bookingResult.tenantId,
-        amount: room.price,
-      });
-    } catch (err) {
-      console.error(
-        'Failed to create payment for booking',
-        bookingResult.id,
-        err,
-      );
-      await this.prisma.booking.update({
-        where: { id: bookingResult.id },
-        data: { status: BookingStatus.PAYMENT_FAILED },
-      });
-      throw err;
-    }
-
-    return {
-      ...bookingResult,
-      paymentClientSecret: payment?.clientSecret,
-    };
+    return bookingResult;
   }
 
   async findAll(filter: FindAllBookingFilterDto) {
@@ -156,6 +141,8 @@ export class BookingsService {
     if (fromCheckIn && toCheckIn) {
       where.checkInDate = { gte: fromCheckIn, lte: toCheckIn };
     }
+
+    where.isDeleted = false;
 
     // Fetch bookings
     const bookings = await this.prisma.booking.findMany({
@@ -282,37 +269,16 @@ export class BookingsService {
     };
   }
 
-  // async findPaymentProof(imagId: number) {
-  //   if (!imagId) throw new BadRequestException('Missing booking id');
-
-  //   const bookingReceipt = await this.prisma.image.findUnique({
-  //     where: { id: imagId },
-  //   });
-
-  //   if (!bookingReceipt) throw new NotFoundException('Booking not found');
-
-  //   const { url: rawDBPaymentUrl, ...bookingReceiptData } = bookingReceipt;
-
-  //   const url = await this.imageService.getMediaPath(rawDBPaymentUrl, false);
-
-  //   return {
-  //     url,
-  //     ...bookingReceiptData,
-  //   };
-  // }
-
   // TENANT: update or cancel booking (generic)
   async patchBooking(bookId: number, payload: PatchTenantBookDto) {
     const { tenantId, cancelReason, newEndDate, newStartDate } = payload;
 
-    // 1️⃣ Validate booking access
     const booking = await this.validateBookingAccess(
       bookId,
       tenantId,
       'TENANT',
     );
 
-    // 2️⃣ Disallow operations on finished/rejected/cancelled bookings
     const blockedStatuses = new Set<BookingStatus>([
       BookingStatus.CANCELLED_BOOKING,
       BookingStatus.COMPLETED_BOOKING,
@@ -325,7 +291,6 @@ export class BookingsService {
       );
     }
 
-    // 3️⃣ If cancelReason exists → cancel booking
     if (cancelReason) {
       return await this.prisma.booking.update({
         where: { id: bookId },
@@ -337,7 +302,6 @@ export class BookingsService {
       });
     }
 
-    // 4️⃣ If new dates exist → update them (assuming your booking model supports it)
     if (newStartDate || newEndDate) {
       if (booking.status !== BookingStatus.PENDING_REQUEST) {
         throw new BadRequestException(
@@ -355,7 +319,6 @@ export class BookingsService {
       });
     }
 
-    // 5️⃣ If neither cancelReason nor new dates exist → invalid request
     throw new BadRequestException('No valid update data provided');
   }
 
@@ -364,6 +327,7 @@ export class BookingsService {
     const booking = await this.validateBookingAccess(bookId, ownerId, 'OWNER');
 
     if (booking.status !== BookingStatus.PENDING_REQUEST) {
+      console.error('Only pending requests can be approved by the owner');
       throw new BadRequestException(
         'Only pending requests can be approved by the owner',
       );
@@ -378,14 +342,39 @@ export class BookingsService {
       },
     });
 
-    //! notification partial integration
+    let payment: { paymentId: number; clientSecret: string } | null = null;
+    try {
+      payment = await this.paymentService.createBookingPayment({
+        bookingId: bookId,
+        tenantId: booking.tenantId,
+        amount: new Prisma.Decimal(booking.room.price),
+      });
+    } catch (err) {
+      console.error('Failed to create payment for booking', bookId, err);
+      await this.prisma.booking.update({
+        where: { id: bookId },
+        data: { status: BookingStatus.PAYMENT_FAILED },
+      });
+      throw err;
+    }
+
     this.bookingEventPublisher.approved({
       bookingId: bookId,
       tenantId: approveBooking.tenantId,
       ownerId: ownerId,
+      data: {
+        tenantId: approveBooking.tenantId,
+        ownerId: ownerId,
+        roomId: approveBooking.roomId,
+        bhId: approveBooking.boardingHouseId,
+        resourceType: PrismaResourceType.BOOKING,
+      },
     });
 
-    return approveBooking;
+    return {
+      ...approveBooking,
+      paymentClientSecret: payment?.clientSecret,
+    };
   }
 
   async patchRejectBooking(
@@ -393,27 +382,38 @@ export class BookingsService {
     payload: PatchBookingRejectionPayloadDTO,
   ) {
     const { ownerId, reason } = payload;
+
     const booking = await this.validateBookingAccess(bookId, ownerId, 'OWNER');
 
-    // Ensure it can still be rejected
-    const blockedStatuses = new Set<BookingStatus>([
-      BookingStatus.CANCELLED_BOOKING,
-      BookingStatus.COMPLETED_BOOKING,
-      BookingStatus.REJECTED_BOOKING,
-    ]);
-
-    if (blockedStatuses.has(booking.status)) {
-      throw new BadRequestException('This booking cannot be rejected');
+    // Only pending bookings can be rejected
+    if (booking.status !== BookingStatus.PENDING_REQUEST) {
+      throw new BadRequestException(
+        'Only pending requests can be rejected by the owner',
+      );
     }
 
-    return await this.prisma.booking.update({
+    const rejectedBooking = await this.prisma.booking.update({
       where: { id: bookId },
       data: {
-        status: 'REJECTED_BOOKING',
-        ownerMessage: reason,
+        status: BookingStatus.REJECTED_BOOKING, // ✅ enum, not string
+        ownerMessage: reason ?? booking.ownerMessage,
         updatedAt: new Date(),
       },
     });
+
+    this.bookingEventPublisher.rejected({
+      bookingId: bookId,
+      tenantId: rejectedBooking.tenantId,
+      data: {
+        tenantId: rejectedBooking.tenantId,
+        ownerId: ownerId,
+        bhId: booking.boardingHouseId,
+        roomId: booking.roomId,
+        resourceType: PrismaResourceType.BOOKING,
+      },
+    });
+
+    return rejectedBooking;
   }
 
   async cancelBooking(bookId: number, payload: CancelBookingDto) {
@@ -463,6 +463,18 @@ export class BookingsService {
       },
     });
 
+    this.bookingEventPublisher.cancelled({
+      bookingId: bookId,
+      tenantId: updated.tenantId,
+      data: {
+        tenantId: updated.tenantId,
+        ownerId: booking.room.boardingHouse.ownerId,
+        bhId: booking.boardingHouseId,
+        roomId: booking.roomId,
+        resourceType: PrismaResourceType.BOOKING,
+      },
+    });
+
     return updated;
   }
 
@@ -483,12 +495,19 @@ export class BookingsService {
     role: 'TENANT' | 'OWNER',
   ) {
     const booking = await this.prisma.booking.findUnique({
-      where: { id: bookId },
+      where: {
+        id: bookId,
+      },
       include: {
         room: {
-          include: {
+          // Use select for EVERYTHING inside this block
+          select: {
+            price: true, // The scalar field you wanted
             boardingHouse: {
-              select: { ownerId: true },
+              // The relation you wanted
+              select: {
+                ownerId: true,
+              },
             },
           },
         },

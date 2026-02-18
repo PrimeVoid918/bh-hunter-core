@@ -6,8 +6,6 @@ import {
   Patch,
   Param,
   Query,
-  UseInterceptors,
-  UploadedFiles,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import {
@@ -15,13 +13,9 @@ import {
   PatchTenantBookDto,
   PatchApprovePayloadDTO,
   PatchBookingRejectionPayloadDTO,
-  CreatePaymentProofDTO,
-  PatchVerifyPaymentDto,
   FindAllBookingFilterDto,
 } from './dto/dtos';
 import { ApiTags } from '@nestjs/swagger';
-import { createMulterConfig } from 'src/infrastructure/shared/utils/multer-config.util';
-import { AnyFilesInterceptor } from '@nestjs/platform-express';
 import { PaymentsService } from '../payments/payments.service';
 
 @ApiTags('bookings')
@@ -53,7 +47,7 @@ export class BookingsController {
   =====================
   */
 
-  @Patch(':id/owner/approve')
+  @Patch(':id/owners/approve')
   patchApproveBookingRequest(
     @Param('id') id: string,
     @Body() approvePayload: PatchApprovePayloadDTO,
@@ -61,7 +55,7 @@ export class BookingsController {
     return this.bookingsService.patchApproveBooking(+id, approvePayload);
   }
 
-  @Patch(':id/owner/reject')
+  @Patch(':id/owners/reject')
   patchRejectBookingRequest(
     @Param('id') id: string,
     @Body() payload: PatchBookingRejectionPayloadDTO,

@@ -4,6 +4,7 @@ import {
   BOOKING_EVENTS,
   BookingApprovedPayload,
   BookingCancelledPayload,
+  BookingCompletedPayload,
   BookingRejectedPayload,
   BookingRequestedPayload,
 } from './bookings.events';
@@ -26,5 +27,9 @@ export class BookingEventPublisher {
 
   cancelled(payload: BookingCancelledPayload) {
     this.emitter.emit(BOOKING_EVENTS.CANCELLED, payload);
+  }
+
+  completed(payload: BookingCompletedPayload) {
+    this.emitter.emit(BOOKING_EVENTS.COMPLETED, payload);
   }
 }

@@ -10,6 +10,7 @@ import { JwtService } from '@nestjs/jwt'; // ** not a custom Service but built i
 import { REQUIRED_DOCUMENTS } from './auth.types';
 import { Prisma, UserRole, VerificationLevel } from '@prisma/client';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
+import { AccountsPublisher } from '../accounts/accounts.publisher';
 
 @Injectable()
 export class AuthService {
@@ -18,6 +19,7 @@ export class AuthService {
     private readonly userUnionService: UserUnionService,
     private readonly cryptoService: CryptoService,
     private readonly jtwService: JwtService,
+    private readonly accountsPublisher: AccountsPublisher,
   ) {}
 
   private get prisma() {
@@ -149,6 +151,8 @@ export class AuthService {
 
     if (!user) throw new NotFoundException('User not found');
 
+    const oldVerificationLevel = user.verificationLevel;
+
     const profileComplete = this.isProfileComplete(user);
 
     let verificationLevel: VerificationLevel;
@@ -163,16 +167,42 @@ export class AuthService {
 
     const registrationStatus = profileComplete ? 'COMPLETED' : 'PENDING';
 
-    if (role === UserRole.TENANT) {
-      await prisma.tenant.update({
-        where: { id: userId },
-        data: { verificationLevel, registrationStatus },
-      });
-    } else {
-      await prisma.owner.update({
-        where: { id: userId },
-        data: { verificationLevel, registrationStatus },
-      });
+    // Update only if something actually changed
+    if (
+      oldVerificationLevel !== verificationLevel ||
+      user.registrationStatus !== registrationStatus
+    ) {
+      if (role === UserRole.TENANT) {
+        await prisma.tenant.update({
+          where: { id: userId },
+          data: { verificationLevel, registrationStatus },
+        });
+      } else {
+        await prisma.owner.update({
+          where: { id: userId },
+          data: { verificationLevel, registrationStatus },
+        });
+      }
+
+      if (oldVerificationLevel !== verificationLevel) {
+        if (verificationLevel === VerificationLevel.FULLY_VERIFIED) {
+          this.accountsPublisher.fullyVerified({
+            id: userId,
+            resourceType: 'VERIFICATION',
+            userRole: role == UserRole.TENANT ? 'TENANT' : 'OWNER',
+          });
+        }
+
+        // if (verificationLevel === VerificationLevel.UNVERIFIED) {
+        //   this.accountsPublisher.setupRequired({
+        //     // id: userId,
+        //     // userRole: role,
+        //     // data: {
+        //     //   previousLevel: oldVerificationLevel,
+        //     // },
+        //   });
+        // }
+      }
     }
 
     return verificationLevel;

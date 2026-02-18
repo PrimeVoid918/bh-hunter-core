@@ -18,6 +18,7 @@ import {
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PaymongoWebhookPayload } from './dto/types';
+import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
 
 interface CreateBookingPaymentInput {
   bookingId: number;
@@ -38,6 +39,7 @@ export class PaymentsService {
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     @Inject('PAYMENT_PROVIDER')
     private readonly provider: PaymentProviderAdapter,
+    private readonly bookingEventPublisher: BookingEventPublisher,
   ) {}
 
   private get prisma() {
@@ -393,9 +395,33 @@ export class PaymentsService {
       });
 
       if (payment.bookingId) {
-        await tx.booking.update({
+        const booking = await tx.booking.update({
           where: { id: payment.bookingId },
           data: { status: 'COMPLETED_BOOKING' },
+        });
+
+        // // 🔹 Emit completed booking event
+        // this.eventEmitter.emit<BookingCompletedPayload>(
+        //   BOOKING_EVENTS.COMPLETED,
+        //   {
+        //     bookingId: booking.id,
+        //     data: {
+        //       tenantId: booking.tenantId,
+        //       ownerId: booking.room.ownerId, // if needed
+        //       roomId: booking.roomId,
+        //     },
+        //   },
+        // );
+        this.bookingEventPublisher.completed({
+          bookingId: payment.bookingId,
+          tenantId: payment.userId,
+          data: {
+            bhId: booking.boardingHouseId,
+            ownerId: payment.ownerId,
+            tenantId: booking.tenantId,
+            resourceType: 'BOOKING',
+            roomId: booking.roomId,
+          },
         });
       }
     });

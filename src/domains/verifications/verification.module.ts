@@ -20,4 +20,4 @@ import { Logger } from 'src/common/logger/logger.service';
     },
   ],
 })
-export class VerifcationModule {}
+export class VerificationModule {}

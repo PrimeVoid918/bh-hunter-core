@@ -31,6 +31,7 @@ import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.except
 import { UpdateVerifcationDto } from '../verifications/dto/update-verifcation.dto';
 import { FindOneVerificationDto } from '../verifications/dto/findOne-verification.dto';
 import { AuthService } from '../auth/auth.service';
+import { AccountsPublisher } from '../accounts/accounts.publisher';
 
 @Injectable()
 export class TenantsService {
@@ -41,6 +42,7 @@ export class TenantsService {
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
     private readonly logger: Logger,
+    private readonly accountsPublisher: AccountsPublisher,
   ) {}
 
   private get prisma() {
@@ -154,7 +156,7 @@ export class TenantsService {
       const prisma = this.prisma;
       // const hashedPassword = await bcrypt.hash(dto.password, 10);
 
-      return await prisma.tenant.create({
+      const created = await prisma.tenant.create({
         data: {
           username: dto.username,
           firstname: dto.firstname,
@@ -167,6 +169,14 @@ export class TenantsService {
           phone_number: dto.phone_number,
         },
       });
+
+      this.accountsPublisher.setupRequired({
+        id: created.id,
+        resourceType: 'VERIFICATION',
+        userRole: 'TENANT',
+      });
+
+      return created;
     } catch (error) {
       if (isPrismaErrorCode(error, 'P2002')) {
         const meta = (error as any)?.meta;

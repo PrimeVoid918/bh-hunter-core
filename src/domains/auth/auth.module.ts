@@ -10,6 +10,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { jwtConfig } from './strategy/jwt/jwt.config';
 import { AdminsModule } from 'src/domains/admins/admins.module';
 import { OwnersModule } from 'src/domains/owners/owners.module';
+import { AccountsPublisher } from '../accounts/accounts.publisher';
 
 @Module({
   imports: [
@@ -20,7 +21,13 @@ import { OwnersModule } from 'src/domains/owners/owners.module';
     OwnersModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, UserUnionService, CryptoService, JwtStrategy],
+  providers: [
+    AccountsPublisher,
+    AuthService,
+    UserUnionService,
+    CryptoService,
+    JwtStrategy,
+  ],
   exports: [UserUnionService, CryptoService],
 })
 export class AuthModule {}

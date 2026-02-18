@@ -10,11 +10,12 @@ import { CreateAdminDto } from './dto/create-admin.dto';
 import { UpdateAdminDto } from './dto/update-admin.dto';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { FindAdminsDto } from './dto/find-admins.dto';
-import { Admin, VerificationStatus } from '@prisma/client';
+import { Admin, ResourceType, VerificationStatus } from '@prisma/client';
 import { TenantsService } from '../tenants/tenants.service';
 import { CreateTenantDto } from '../tenants/dto/create-tenant.dto';
 import { OwnersService } from '../owners/owners.service';
 import { CreateOwnerDto } from '../owners/dto/create-owner.dto';
+import { AdminsPublisher } from './events/admins.publisher';
 
 /*
  *
@@ -29,6 +30,7 @@ export class AdminsService {
     private readonly tenantsService: TenantsService,
     @Inject(forwardRef(() => OwnersService))
     private readonly ownersService: OwnersService,
+    private readonly adminsPublisher: AdminsPublisher,
   ) {}
 
   private get prisma() {
@@ -196,6 +198,37 @@ export class AdminsService {
         verifiedById: payload.adminId,
       },
     });
+
+    //
+    if (payload.verificationStatus == 'APPROVED') {
+      this.adminsPublisher.approve({
+        adminId: payload.adminId,
+        verificationDocumentId: id,
+        userId: existingPermit.userId,
+        data: {
+          verificationDocumentId: id,
+          ownerId: existingPermit.ownerId ?? null,
+          tenantId: existingPermit.tenantId ?? null,
+          resourceType: ResourceType.VERIFICATION,
+          userRole: existingPermit.userType,
+        },
+      });
+    }
+
+    if (payload.verificationStatus == 'REJECTED') {
+      this.adminsPublisher.reject({
+        adminId: payload.adminId,
+        verificationDocumentId: id,
+        userId: existingPermit.userId,
+        data: {
+          verificationDocumentId: id,
+          ownerId: existingPermit.ownerId ?? null,
+          tenantId: existingPermit.tenantId ?? null,
+          resourceType: ResourceType.VERIFICATION,
+          userRole: existingPermit.userType,
+        },
+      });
+    }
 
     return {
       permitStatus: result.verificationStatus,

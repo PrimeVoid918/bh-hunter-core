@@ -1,7 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { CreateNotificationsDto } from './dto/create-notifications.dto';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
+import { QueryNotificationsDto } from './dto/query-notifications.dto';
 
 @Injectable()
 export class NotificationsService {
@@ -11,6 +12,37 @@ export class NotificationsService {
 
   private get prisma() {
     return this.database.getClient();
+  }
+
+  async findAll(
+    userId: number,
+    role: UserRole,
+    filters: QueryNotificationsDto,
+  ) {
+    const where: Prisma.NotificationWhereInput = {
+      recipientId: userId,
+      recipientRole: role,
+      isDeleted: false,
+    };
+
+    if (filters.isRead !== undefined) {
+      where.isRead = filters.isRead;
+    }
+
+    if (filters.resourceType) {
+      where.entityType = filters.resourceType;
+    }
+
+    if (filters.type) {
+      where.type = filters.type;
+    }
+
+    return this.prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      take: filters.limit ?? 20,
+      skip: ((filters.page ?? 1) - 1) * (filters.limit ?? 20),
+    });
   }
 
   async create(data: CreateNotificationsDto) {
@@ -70,4 +102,21 @@ export class NotificationsService {
       },
     });
   }
+
+  async markAllAsRead(userId: number, role: UserRole) {
+    return this.prisma.notification.updateMany({
+      where: {
+        recipientId: userId,
+        recipientRole: role,
+        isRead: false,
+        isDeleted: false,
+      },
+      data: {
+        isRead: true,
+        readAt: new Date(),
+      },
+    });
+  }
+
+  async remove() {}
 }

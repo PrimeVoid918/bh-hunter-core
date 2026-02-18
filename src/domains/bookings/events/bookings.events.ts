@@ -1,3 +1,4 @@
+import { ResourceType } from '@prisma/client';
 
 //event names (constants)
 export const BOOKING_EVENTS = {
@@ -7,6 +8,14 @@ export const BOOKING_EVENTS = {
   CANCELLED: 'booking.cancelled',
   COMPLETED: 'booking.completed',
 } as const;
+
+export interface BookingDataPayload {
+  resourceType: ResourceType;
+  ownerId: number;
+  tenantId: number;
+  roomId: number;
+  bhId: number;
+}
 
 //payload types
 export type BookingRequestedPayload = {
@@ -19,22 +28,33 @@ export type BookingRequestedPayload = {
     lastname: string | null;
   };
   boardingHouseId: number;
+  data: BookingDataPayload;
 };
 
 export type BookingApprovedPayload = {
   bookingId: number;
   tenantId: number;
   ownerId: number;
+  data: BookingDataPayload;
 };
 
 export type BookingRejectedPayload = {
   bookingId: number;
   tenantId: number;
   reason?: string;
+  data: BookingDataPayload;
 };
 
 export type BookingCancelledPayload = {
   bookingId: number;
   tenantId: number;
   reason?: string;
+  data: BookingDataPayload;
+};
+
+export type BookingCompletedPayload = {
+  bookingId: number;
+  tenantId: number;
+  reason?: string;
+  data: BookingDataPayload;
 };

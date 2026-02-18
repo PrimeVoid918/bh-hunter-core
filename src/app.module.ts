@@ -28,6 +28,9 @@ import { MapsModule } from './domains/maps/maps.module';
 import { SocketModule } from './infrastructure/sockets/sockets.module';
 import { ReviewsModule } from './domains/reviews/reviews.module';
 import { PaymentsModule } from './domains/payments/payments.module';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { NotificationsModule } from './domains/notifications/notifications.module';
+import { AccountsModule } from './domains/accounts/accounts.module';
 
 @Module({
   imports: [
@@ -40,6 +43,10 @@ import { PaymentsModule } from './domains/payments/payments.module';
           serveRoot: configService.mediaPaths.public,
         },
       ],
+    }),
+    EventEmitterModule.forRoot({
+      wildcard: false,
+      verboseMemoryLeak: true, // optional: logs when listeners are not fired
     }),
     ScheduleModule.forRoot(),
     MaintenanceModule,
@@ -59,6 +66,8 @@ import { PaymentsModule } from './domains/payments/payments.module';
     SocketModule,
     ReviewsModule,
     PaymentsModule,
+    NotificationsModule,
+    AccountsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -26,6 +26,7 @@ import { Logger } from 'src/common/logger/logger.service';
 import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.exceptions';
 import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-validation.utils';
 import { AuthService } from '../auth/auth.service';
+import { AccountsPublisher } from '../accounts/accounts.publisher';
 
 @Injectable()
 export class OwnersService {
@@ -35,6 +36,7 @@ export class OwnersService {
     @Inject(forwardRef(() => AuthService)) // <--- ADD THIS
     private readonly authService: AuthService,
     private readonly logger: Logger,
+    private readonly accountsPublisher: AccountsPublisher,
   ) {}
 
   private get prisma() {
@@ -147,7 +149,7 @@ export class OwnersService {
     //! enable on prod
     // const hashedPassword = await bcrypt.hash(dto.password, 10);
     try {
-      return await this.prisma.owner.create({
+      const created = await this.prisma.owner.create({
         data: {
           username: dto.username,
           firstname: dto.firstname,
@@ -159,6 +161,14 @@ export class OwnersService {
           phone_number: dto.phone_number,
         },
       });
+
+      this.accountsPublisher.setupRequired({
+        id: created.id,
+        resourceType: 'VERIFICATION',
+        userRole: 'OWNER',
+      });
+
+      return created;
     } catch (error: unknown) {
       if (isPrismaErrorCode(error, 'P2002')) {
         const meta = (error as any)?.meta;
@@ -389,7 +399,7 @@ export class OwnersService {
     });
 
     return {
-      verified: owner.verificationLevel === 'FULLY_VERIFIED', // 👈 backward compatibility
+      verified: owner.verificationLevel === 'FULLY_VERIFIED',
       registrationStatus: owner.registrationStatus,
       verificationLevel: owner.verificationLevel,
       verificationDocuments: documents.map((p) => ({

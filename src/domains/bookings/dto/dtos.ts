@@ -128,8 +128,8 @@ export class PatchApprovePayloadDTO {
   @IsNumber()
   ownerId!: number;
 
-  @IsNumber()
-  tenantId!: number;
+  // @IsNumber()
+  // tenantId!: number;
 
   @IsOptional()
   @IsString()
@@ -143,8 +143,8 @@ export class PatchBookingRejectionPayloadDTO {
   @IsNumber()
   ownerId!: number;
 
-  @IsNumber()
-  tenantId!: number;
+  // @IsNumber()
+  // tenantId!: number;
 
   @IsString()
   reason!: string;

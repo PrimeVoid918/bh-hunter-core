@@ -11,13 +11,16 @@ import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path
 import { VerifcationService } from 'src/domains/verifications/verification.service';
 import { Logger } from 'src/common/logger/logger.service';
 import { DocumentService } from 'src/infrastructure/document/document.service';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
 import { PaymongoService } from '../payments/strategies/paymongo/paymongo.service';
 import { AuthService } from '../auth/auth.service';
 import { CryptoService } from '../auth/utilities/crypto.service';
 import { JwtService } from '@nestjs/jwt';
+import { SocketGateway } from 'src/infrastructure/sockets/sockets.gateway';
+import { NotificationGateway } from 'src/infrastructure/sockets/notification/notification.gateway';
+import { AdminsPublisher } from '../admins/events/admins.publisher';
+import { AccountsPublisher } from '../accounts/accounts.publisher';
 
 @Module({
   imports: [],
@@ -44,10 +47,13 @@ import { JwtService } from '@nestjs/jwt';
       useValue: 'media', // or your base directory path
     },
     DocumentService,
-    EventEmitter2,
     AuthService,
     CryptoService,
     JwtService,
+    SocketGateway,
+    NotificationGateway,
+    AdminsPublisher,
+    AccountsPublisher,
   ],
   exports: ['PAYMENT_PROVIDER'],
 })

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { OwnersService } from './owners.service';
 import { OwnersController } from './owners.controller';
-import { VerifcationModule } from 'src/domains/verifications/verification.module';
+import { VerificationModule } from 'src/domains/verifications/verification.module';
 import { VerifcationService } from 'src/domains/verifications/verification.service';
 import { DocumentModule } from 'src/infrastructure/document/document.module';
 import { DocumentService } from 'src/infrastructure/document/document.service';
@@ -15,11 +15,15 @@ import { JwtService } from '@nestjs/jwt';
 import { TenantsService } from '../tenants/tenants.service';
 import { AdminsService } from '../admins/admins.service';
 import { ImageService } from 'src/infrastructure/image/image.service';
+import { AdminsPublisher } from '../admins/events/admins.publisher';
+import { AccountsPublisher } from '../accounts/accounts.publisher';
 
 @Module({
-  imports: [VerifcationModule, DocumentModule],
+  imports: [VerificationModule, DocumentModule],
   controllers: [OwnersController],
   providers: [
+    AccountsPublisher,
+    AdminsPublisher,
     OwnersService,
     VerifcationService,
     DocumentService,

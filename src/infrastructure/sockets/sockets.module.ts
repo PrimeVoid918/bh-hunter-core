@@ -19,11 +19,14 @@ import { MediaPathBuilderUtil } from '../shared/utils/media-path-builder.util';
 import { DocumentService } from '../document/document.service';
 import { AuthService } from 'src/domains/auth/auth.service';
 import { CryptoService } from 'src/domains/auth/utilities/crypto.service';
+import { AdminsPublisher } from 'src/domains/admins/events/admins.publisher';
+import { AccountsPublisher } from 'src/domains/accounts/accounts.publisher';
 
 @Global() // Making it global allows any domain to inject the Gateway easily
 @Module({
   imports: [JwtModule.register({})],
   providers: [
+    AccountsPublisher,
     GameGateway,
     UserUnionService,
     TenantsService,
@@ -39,6 +42,7 @@ import { CryptoService } from 'src/domains/auth/utilities/crypto.service';
     SocketGateway,
     AuthService,
     CryptoService,
+    AdminsPublisher,
     {
       provide: 'BASE_DIR',
       useValue: 'media', // or your base directory path
