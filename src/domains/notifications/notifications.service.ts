@@ -19,44 +19,35 @@ export class NotificationsService {
     role: UserRole,
     filters: QueryNotificationsDto,
   ) {
-    const page = Math.max(1, Number(filters.page) || 1);
-    const limit = Math.min(50, Math.max(1, Number(filters.limit) || 20));
-    // hard cap at 50 to prevent abuse
+    const page = Number(filters.page) > 0 ? Number(filters.page) : 1;
+    const limit = Number(filters.limit) > 0 ? Number(filters.limit) : 20;
 
     const where: Prisma.NotificationWhereInput = {
       recipientId: userId,
       recipientRole: role,
       isDeleted: false,
-      ...(filters.isRead !== undefined && {
-        isRead: filters.isRead === true,
-      }),
-      ...(filters.resourceType && {
-        entityType: filters.resourceType,
-      }),
-      ...(filters.type && {
-        type: filters.type,
-      }),
     };
 
-    const [data, total] = await this.prisma.$transaction([
-      this.prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.notification.count({ where }),
-    ]);
+    if (filters.isRead !== undefined) {
+      where.isRead = filters.isRead === true;
+    }
 
-    return {
-      data,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    if (filters.resourceType) {
+      where.entityType = filters.resourceType;
+    }
+
+    if (filters.type) {
+      where.type = filters.type;
+    }
+
+    const results = await this.prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+
+    return results;
   }
 
   async create(data: CreateNotificationsDto) {
