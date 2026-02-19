@@ -73,3 +73,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 /custom-local-scripts
 pg_log.txt
+/.nogic
