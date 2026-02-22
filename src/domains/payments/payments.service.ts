@@ -15,6 +15,7 @@ import {
   ResourceType,
   PayoutStatus,
   Payment,
+  Prisma,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PaymongoWebhookPayload } from './dto/types';
@@ -95,6 +96,7 @@ export class PaymentsService {
   }
 
   async createBookingPaymentForFrontend(bookingId: number) {
+    // Fetch booking
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { room: { include: { boardingHouse: true } } },
@@ -104,24 +106,35 @@ export class PaymentsService {
     if (booking.status !== 'AWAITING_PAYMENT')
       throw new BadRequestException('Booking is not awaiting payment');
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        userId: booking.tenantId,
-        userType: ResourceType.TENANT,
-        ownerId: booking.room.boardingHouse.ownerId,
-        amount: booking.room.price,
-        currency: CurrencyType.PHP,
-        purchaseType: PurchaseType.ROOM_BOOKING,
-        status: PaymentStatus.PENDING,
-        bookingId: booking.id,
-        provider: PaymentProvider.PAYMONGO,
-      },
+    // Check if a payment already exists
+    let latestPayment = await this.prisma.payment.findFirst({
+      where: { bookingId },
+      orderBy: { createdAt: 'desc' },
     });
 
-    const link = await this.provider.createPaymentLink(payment);
+    // If no payment yet, create one
+    if (!latestPayment) {
+      latestPayment = await this.prisma.payment.create({
+        data: {
+          userId: booking.tenantId,
+          userType: ResourceType.TENANT,
+          ownerId: booking.room.boardingHouse.ownerId,
+          amount: booking.room.price,
+          currency: CurrencyType.PHP,
+          purchaseType: PurchaseType.ROOM_BOOKING,
+          status: PaymentStatus.PENDING,
+          bookingId: booking.id,
+          provider: PaymentProvider.PAYMONGO,
+        },
+      });
+    }
 
+    // Create the PayMongo payment link
+    const link = await this.provider.createPaymentLink(latestPayment);
+
+    // Update payment with provider link ID
     await this.prisma.payment.update({
-      where: { id: payment.id },
+      where: { id: latestPayment.id },
       data: {
         providerPaymentLinkId: link.id,
         status: PaymentStatus.REQUIRES_ACTION,
@@ -129,7 +142,7 @@ export class PaymentsService {
     });
 
     return {
-      paymentId: payment.id,
+      paymentId: latestPayment.id,
       checkoutUrl: link.checkoutUrl,
     };
   }
@@ -323,29 +336,37 @@ export class PaymentsService {
       return { ignored: true };
     }
 
-    const intentId =
-      resourceAttributes?.payment_intent_id ||
-      resourceAttributes?.payment_intent?.id;
+    // Try metadata first
+    const metadata = resourceAttributes?.metadata;
+    const internalPaymentId = metadata?.paymentId;
 
-    const providerPaymentId = resource?.id;
+    let payment: Payment | null = null;
 
-    let payment = null;
-
-    if (intentId) {
-      payment = await this.prisma.payment.findFirst({
-        where: { providerPaymentIntentId: intentId },
+    if (internalPaymentId) {
+      payment = await this.prisma.payment.findUnique({
+        where: { id: Number(internalPaymentId) },
       });
     }
 
-    if (!payment && providerPaymentId) {
+    // fallback to providerPaymentIntentId
+    if (!payment && resourceAttributes?.payment_intent_id) {
       payment = await this.prisma.payment.findFirst({
-        where: { providerPaymentId: providerPaymentId },
+        where: {
+          providerPaymentIntentId: resourceAttributes.payment_intent_id,
+        },
       });
     }
 
+    // fallback to providerPaymentId
+    if (!payment && resource?.id) {
+      payment = await this.prisma.payment.findFirst({
+        where: { providerPaymentId: resource.id },
+      });
+    }
+
+    // fallback to description parsing (legacy)
     if (!payment && resourceAttributes?.description?.includes('Booking #')) {
       const bookingId = Number(resourceAttributes.description.split('#')[1]);
-
       payment = await this.prisma.payment.findFirst({
         where: { bookingId },
         orderBy: { createdAt: 'desc' },
@@ -353,51 +374,60 @@ export class PaymentsService {
     }
 
     if (!payment) {
-      console.log(
-        'Webhook ignored: payment not found',
-        intentId,
-        providerPaymentId,
-      );
+      console.log('Webhook ignored: payment not found', internalPaymentId);
       return { ignored: true };
     }
 
-    const updateData: any = {};
-
-    if (intentId && !payment.providerPaymentIntentId) {
-      updateData.providerPaymentIntentId = intentId;
+    // Update payment record with provider IDs if missing
+    const updateData: Prisma.PaymentUpdateInput = {};
+    if (
+      resourceAttributes.payment_intent_id &&
+      !payment.providerPaymentIntentId
+    ) {
+      updateData.providerPaymentIntentId = resourceAttributes.payment_intent_id;
     }
-
-    if (providerPaymentId && !payment.providerPaymentId) {
-      updateData.providerPaymentId = providerPaymentId;
+    if (resource?.id && !payment.providerPaymentId) {
+      updateData.providerPaymentId = resource.id;
     }
 
     if (Object.keys(updateData).length > 0) {
       payment = await this.prisma.payment.update({
         where: { id: payment.id },
-        data: updateData,
+        data: updateData, // now type-safe
       });
     }
 
-    if (payment.status === PaymentStatus.PAID) {
-      return { ignored: true };
+    if (payment.status === PaymentStatus.PAID) return { ignored: true };
+
+    switch (eventType) {
+      case 'payment.paid':
+        return this.markPaymentPaid(payment);
+      case 'payment.failed':
+        return this.markPaymentFailedTransaction(payment);
+      default:
+        return { ignored: true };
     }
+  }
 
-    const status = resourceAttributes?.status;
+  /** Mark failed with transaction to mirror paid flow */
+  private async markPaymentFailedTransaction(payment: Payment) {
+    if (payment.status === PaymentStatus.PAID) return { ignored: true };
 
-    if (status === 'paid' || eventType === 'payment.paid') {
-      return this.markPaymentPaid(payment);
-    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: { status: PaymentStatus.FAILED },
+      });
 
-    if (
-      status === 'failed' ||
-      eventType === 'payment.failed' ||
-      eventType === 'checkout_session.expired' ||
-      eventType === 'checkout_session.failed'
-    ) {
-      return this.markPaymentFailed(payment);
-    }
+      if (payment.bookingId) {
+        await tx.booking.update({
+          where: { id: payment.bookingId },
+          data: { status: 'AWAITING_PAYMENT' }, // revert booking to allow retry
+        });
+      }
+    });
 
-    return { ignored: true };
+    return { success: true };
   }
 
   private async markPaymentPaid(payment: Payment) {
