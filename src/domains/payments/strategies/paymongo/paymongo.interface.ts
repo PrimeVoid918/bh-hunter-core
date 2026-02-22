@@ -3,6 +3,7 @@ import { Payment, PaymentStatus } from '@prisma/client';
 
 export interface PaymentIntentResult {
   id: string; // provider's payment intent ID
+  paymentIntentId: string;
   checkoutUrl?: string; // optional, only for payment links
   clientSecret?: string; // optional, only for payment intents
 }

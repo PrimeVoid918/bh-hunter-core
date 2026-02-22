@@ -78,10 +78,9 @@ export class PaymentsService {
       },
     });
 
-    // ✅ CHANGED: Use Payment Intent (checkout session) instead of payment link
     const intent = await this.provider.createPaymentIntent(payment);
 
-    // Update payment with provider info
+    // update payment with provider info
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: {
@@ -90,7 +89,7 @@ export class PaymentsService {
       },
     });
 
-    // Return client secret for RN app to confirm payment in-app
+    // return client secret for RN app to confirm payment in-app
     return {
       paymentId: payment.id,
       clientSecret: intent.clientSecret!,
@@ -98,7 +97,6 @@ export class PaymentsService {
   }
 
   async createBookingPaymentForFrontend(bookingId: number) {
-    // Fetch booking
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
       include: { room: { include: { boardingHouse: true } } },
@@ -108,43 +106,33 @@ export class PaymentsService {
     if (booking.status !== 'AWAITING_PAYMENT')
       throw new BadRequestException('Booking is not awaiting payment');
 
-    // Check if a payment already exists
-    let latestPayment = await this.prisma.payment.findFirst({
-      where: { bookingId },
-      orderBy: { createdAt: 'desc' },
+    const payment = await this.prisma.payment.create({
+      data: {
+        userId: booking.tenantId,
+        userType: ResourceType.TENANT,
+        ownerId: booking.room.boardingHouse.ownerId,
+        amount: booking.room.price,
+        currency: CurrencyType.PHP,
+        purchaseType: PurchaseType.ROOM_BOOKING,
+        status: PaymentStatus.PENDING,
+        bookingId: booking.id,
+        provider: PaymentProvider.PAYMONGO,
+      },
     });
 
-    // If no payment yet, create one
-    if (!latestPayment) {
-      latestPayment = await this.prisma.payment.create({
-        data: {
-          userId: booking.tenantId,
-          userType: ResourceType.TENANT,
-          ownerId: booking.room.boardingHouse.ownerId,
-          amount: booking.room.price,
-          currency: CurrencyType.PHP,
-          purchaseType: PurchaseType.ROOM_BOOKING,
-          status: PaymentStatus.PENDING,
-          bookingId: booking.id,
-          provider: PaymentProvider.PAYMONGO,
-        },
-      });
-    }
+    const link = await this.provider.createPaymentLink(payment);
 
-    // Create the PayMongo payment link
-    const link = await this.provider.createPaymentLink(latestPayment);
-
-    // Update payment with provider link ID
     await this.prisma.payment.update({
-      where: { id: latestPayment.id },
+      where: { id: payment.id },
       data: {
         providerPaymentLinkId: link.id,
+        providerPaymentIntentId: link.paymentIntentId,
         status: PaymentStatus.REQUIRES_ACTION,
       },
     });
 
     return {
-      paymentId: latestPayment.id,
+      paymentId: payment.id,
       checkoutUrl: link.checkoutUrl,
     };
   }
@@ -196,8 +184,6 @@ export class PaymentsService {
       },
     });
 
-    // here you could integrate GCASH API to trigger actual transfer
-    // after successful transfer, mark as PAID
     return payout;
   }
 
@@ -317,42 +303,38 @@ export class PaymentsService {
   async handlePaymongoWebhook(payload: any) {
     console.log('payload:', JSON.stringify(payload, null, 2));
 
-    const eventType = payload?.data?.attributes?.event_type;
-    const paymentIntentId = payload?.data?.attributes?.payment_intent;
+    const eventType = payload?.data?.attributes?.type;
+    const paymentAttributes = payload?.data?.attributes?.data?.attributes;
 
-    if (!eventType) {
+    if (!eventType || !paymentAttributes) {
+      console.log('Webhook ignored: malformed payload');
       return { ignored: true };
     }
 
-    /**
-     * STEP 1 — Fetch PaymentIntent from PayMongo
-     * Because PayMongo webhook only gives payment_intent,
-     * not metadata directly.
-     */
-    if (!paymentIntentId) {
-      return { ignored: true };
+    let payment: Payment | null = null;
+
+    // 1️⃣ Try metadata first
+    if (paymentAttributes?.metadata?.paymentId) {
+      payment = await this.prisma.payment.findUnique({
+        where: { id: Number(paymentAttributes.metadata.paymentId) },
+      });
     }
 
-    // Fetch intent to retrieve metadata
-    const intentRes = await this.provider.retrievePaymentIntent(
-      paymentIntentId as string,
-    );
-    // await this.provider.retrievePaymentIntent(paymentIntentId);
-
-    const metadata = intentRes?.attributes?.metadata;
-    const internalPaymentId = metadata?.paymentId;
-
-    if (!internalPaymentId) {
-      console.log('Webhook ignored: missing metadata.paymentId');
-      return { ignored: true };
+    // 2️⃣ Fallback to payment_intent_id
+    if (!payment && paymentAttributes?.payment_intent_id) {
+      payment = await this.prisma.payment.findFirst({
+        where: {
+          providerPaymentIntentId: paymentAttributes.payment_intent_id,
+        },
+      });
     }
-
-    const payment = await this.prisma.payment.findUnique({
-      where: { id: Number(internalPaymentId) },
-    });
 
     if (!payment) {
-      console.log('Webhook ignored: payment not found', internalPaymentId);
+      console.log(
+        'Webhook ignored: payment not found for metadata or intent',
+        paymentAttributes.metadata,
+        paymentAttributes.payment_intent_id,
+      );
       return { ignored: true };
     }
 
@@ -451,7 +433,7 @@ export class PaymentsService {
     if (payment.bookingId) {
       await this.prisma.booking.update({
         where: { id: payment.bookingId },
-        data: { status: BookingStatus.AWAITING_PAYMENT },
+        data: { status: BookingStatus.PAYMENT_FAILED },
       });
     }
 

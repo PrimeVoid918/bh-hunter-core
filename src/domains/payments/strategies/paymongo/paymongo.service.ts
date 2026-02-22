@@ -124,7 +124,7 @@ export class PaymongoService {
             'card',
             'grab_pay',
             'qrph',
-          ], // More options for tenants!
+          ],
           line_items: [
             {
               amount: Math.round(Number(payment.amount) * 100),
@@ -140,7 +140,6 @@ export class PaymongoService {
             paymentId: String(payment.id),
             bookingId: String(payment.bookingId),
           },
-          // Optional: Redirect them back to your app/site after success
         },
       },
     };
@@ -153,12 +152,15 @@ export class PaymongoService {
 
     const sessionData = res.data.data;
 
-    // This is the "Magic" URL you need
     const checkoutUrl = sessionData.attributes.checkout_url;
+    const paymentIntentId =
+      sessionData.attributes.payment_intent?.id ||
+      sessionData.attributes.payment_intent_id;
 
     return {
-      id: sessionData.id, // cs_test_...
-      checkoutUrl, // https://checkout.paymongo.com/cs_test_...
+      id: sessionData.id,
+      paymentIntentId,
+      checkoutUrl,
     };
   }
 
@@ -244,9 +246,9 @@ export class PaymongoService {
       const payload = {
         data: {
           attributes: {
-            amount: Number(payment.amount) * 100, // PayMongo expects cents
+            amount: Number(payment.amount) * 100, // payMongo expects cents
             currency: payment.currency,
-            payment_method_allowed: ['card'], // only cards for now
+            payment_method_allowed: ['card'],
             payment_method_options: { card: { request_three_d_secure: 'any' } },
             description: `Booking #${payment.bookingId}`,
             metadata: {
