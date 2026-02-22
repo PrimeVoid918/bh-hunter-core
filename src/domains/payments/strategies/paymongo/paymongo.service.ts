@@ -210,6 +210,33 @@ export class PaymongoService {
   /**
    * Create a Payment Intent (checkout session) for in-app RN payment
    */
+  async retrievePaymentIntent(intentId: string): Promise<any> {
+    try {
+      const res = await axios.get(
+        `${this.apiBase}/payment_intents/${intentId}`,
+        { headers: this.authHeader },
+      );
+
+      return res.data.data;
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        console.error(
+          'PayMongo retrievePaymentIntent error:',
+          err.response?.data ?? err.message,
+        );
+      } else {
+        console.error('Unknown retrievePaymentIntent error:', err);
+      }
+
+      throw new InternalServerErrorException(
+        'Failed to retrieve payment intent',
+      );
+    }
+  }
+
+  /**
+   * Create a Payment Intent (checkout session) for in-app RN payment
+   */
   async createPaymentIntent(
     payment: Payment,
   ): Promise<{ id: string; clientSecret: string }> {

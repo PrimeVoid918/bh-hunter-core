@@ -25,6 +25,8 @@ export interface PaymentProviderAdapter {
    */
   refundPayment(payment: Payment, reason?: string): Promise<any>;
 
+  retrievePaymentIntent(intentId: string): Promise<any>;
+
   /**
    * Optionally handle webhook payloads from provider
    * @param payload - raw provider webhook payload

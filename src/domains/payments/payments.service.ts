@@ -21,6 +21,7 @@ import {
 import { Decimal } from '@prisma/client/runtime/library';
 import { PaymongoWebhookPayload } from './dto/types';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
+import axios, { AxiosError, AxiosResponse } from 'axios';
 
 interface CreateBookingPaymentInput {
   bookingId: number;
@@ -315,20 +316,53 @@ export class PaymentsService {
   */
   async handlePaymongoWebhook(payload: any) {
     console.log('payload:', JSON.stringify(payload, null, 2));
+
     const eventType = payload?.data?.attributes?.event_type;
     const paymentIntentId = payload?.data?.attributes?.payment_intent;
 
-    const payment = await this.prisma.payment.findFirst({
-      where: { providerPaymentIntentId: paymentIntentId },
+    if (!eventType) {
+      return { ignored: true };
+    }
+
+    /**
+     * STEP 1 — Fetch PaymentIntent from PayMongo
+     * Because PayMongo webhook only gives payment_intent,
+     * not metadata directly.
+     */
+    if (!paymentIntentId) {
+      return { ignored: true };
+    }
+
+    // Fetch intent to retrieve metadata
+    const intentRes = await this.provider.retrievePaymentIntent(
+      paymentIntentId as string,
+    );
+    // await this.provider.retrievePaymentIntent(paymentIntentId);
+
+    const metadata = intentRes?.attributes?.metadata;
+    const internalPaymentId = metadata?.paymentId;
+
+    if (!internalPaymentId) {
+      console.log('Webhook ignored: missing metadata.paymentId');
+      return { ignored: true };
+    }
+
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: Number(internalPaymentId) },
     });
 
-    if (!payment) return { ignored: true };
+    if (!payment) {
+      console.log('Webhook ignored: payment not found', internalPaymentId);
+      return { ignored: true };
+    }
 
     switch (eventType) {
       case 'payment.paid':
         return this.markPaymentPaid(payment);
+
       case 'payment.failed':
         return this.markPaymentFailed(payment);
+
       default:
         return { ignored: true };
     }
