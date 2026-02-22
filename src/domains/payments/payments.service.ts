@@ -103,6 +103,8 @@ export class PaymentsService {
     });
 
     if (!booking) throw new NotFoundException('Booking not found');
+
+    //!! possible rety route, by detecting a retry status
     if (booking.status !== 'AWAITING_PAYMENT')
       throw new BadRequestException('Booking is not awaiting payment');
 

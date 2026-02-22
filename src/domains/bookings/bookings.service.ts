@@ -111,6 +111,7 @@ export class BookingsService {
 
     const {
       tenantId,
+      bookingType,
       bookId,
       boardingHouseId,
       status,
@@ -129,7 +130,6 @@ export class BookingsService {
     if (bookId !== undefined) where.id = +bookId;
     if (status !== undefined) where.status = status;
 
-    // Room filter
     if (roomId !== undefined) where.room = { id: +roomId };
 
     // Boarding house filter

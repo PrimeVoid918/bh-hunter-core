@@ -31,6 +31,7 @@ import { PaymentsModule } from './domains/payments/payments.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { NotificationsModule } from './domains/notifications/notifications.module';
 import { AccountsModule } from './domains/accounts/accounts.module';
+import { MetricsModule } from './domains/metrics/metrics.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { AccountsModule } from './domains/accounts/accounts.module';
     PaymentsModule,
     NotificationsModule,
     AccountsModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [

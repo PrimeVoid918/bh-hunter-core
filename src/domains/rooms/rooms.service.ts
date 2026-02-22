@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ImATeapotException,
   Inject,
   Injectable,
   NotFoundException,
