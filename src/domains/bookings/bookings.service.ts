@@ -324,19 +324,17 @@ export class BookingsService {
 
   async patchApproveBooking(bookId: number, payload: PatchApprovePayloadDTO) {
     const { ownerId, message } = payload;
+
     const booking = await this.validateBookingAccess(bookId, ownerId, 'OWNER');
 
     if (booking.status !== BookingStatus.PENDING_REQUEST) {
-      console.error('Only pending requests can be approved by the owner');
-      throw new BadRequestException(
-        'Only pending requests can be approved by the owner',
-      );
+      throw new BadRequestException('Only pending requests can be approved');
     }
 
-    const approveBooking = await this.prisma.booking.update({
+    const updatedBooking = await this.prisma.booking.update({
       where: { id: bookId },
       data: {
-        status: BookingStatus.AWAITING_PAYMENT, // ✅ waiting for proof
+        status: BookingStatus.AWAITING_PAYMENT,
         ownerMessage: message ?? booking.ownerMessage,
         updatedAt: new Date(),
       },
@@ -360,21 +358,18 @@ export class BookingsService {
 
     this.bookingEventPublisher.approved({
       bookingId: bookId,
-      tenantId: approveBooking.tenantId,
-      ownerId: ownerId,
+      tenantId: updatedBooking.tenantId,
+      ownerId,
       data: {
-        tenantId: approveBooking.tenantId,
-        ownerId: ownerId,
-        roomId: approveBooking.roomId,
-        bhId: approveBooking.boardingHouseId,
+        tenantId: updatedBooking.tenantId,
+        ownerId,
+        roomId: updatedBooking.roomId,
+        bhId: updatedBooking.boardingHouseId,
         resourceType: PrismaResourceType.BOOKING,
       },
     });
 
-    return {
-      ...approveBooking,
-      paymentClientSecret: payment?.clientSecret,
-    };
+    return { ...updatedBooking, paymentClientSecret: payment.clientSecret };
   }
 
   async patchRejectBooking(
