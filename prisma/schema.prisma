@@ -199,7 +199,7 @@ model Tenant {
   age                          Int?                   @default(0)
   guardian                     String?
   address                      String?
-  phone_number                 String?
+  phone_number                 String?                @unique
   isDeleted                    Boolean                @default(false)
   deletedAt                    DateTime?
   bookings                     Booking[]
@@ -224,7 +224,7 @@ model Owner {
   updatedAt                    DateTime               @updatedAt
   age                          Int?                   @default(0)
   address                      String?
-  phone_number                 String?
+  phone_number                 String?                @unique
   boardingHouses               BoardingHouse[]
   isDeleted                    Boolean                @default(false)
   deletedAt                    DateTime?
@@ -259,7 +259,7 @@ model Admin {
   updatedAt             DateTime               @updatedAt
   age                   Int                    @default(0)
   address               String
-  phone_number          String
+  phone_number          String                 @unique
   isDeleted             Boolean                @default(false)
   deletedAt             DateTime?
   verificationDocuments VerificationDocument[]

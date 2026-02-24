@@ -193,9 +193,4 @@ export class BoardingHousesController {
   remove(@Param('id') id: string) {
     return this.boardingHousesService.remove(+id);
   }
-
-  // @Delete(':id/gallery')
-  // removeGallery(@Param('id') id: string) {
-  //   return this.boardingHousesService.removeGallery(+id);
-  // }
 }

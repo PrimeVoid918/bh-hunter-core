@@ -2,24 +2,23 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { PrismaService } from 'src/infrastructure/database/prisma.service';
 import { UpdateRoomDto } from './dto/update-room.dto';
 import { ImageService } from 'src/infrastructure/image/image.service';
-// import { ImageService } from 'src/infrastructure/image/image.service';
 import { MediaType } from '@prisma/client';
 import { CreateRoomsWithGallery } from './types';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
 import { DBClient } from 'src/infrastructure/image/types/types';
 
-// * turn this into module later
-
 @Injectable()
 export class RoomsService {
   constructor(
-    @Inject('IDatabaseService') private readonly database: IDatabaseService,
+    @Inject('IDatabaseService')
+    private readonly database: IDatabaseService,
     private readonly imageService: ImageService,
   ) {}
 
@@ -27,6 +26,9 @@ export class RoomsService {
     return this.database.getClient();
   }
 
+  // -------------------------------------------------------
+  // CREATE
+  // -------------------------------------------------------
   async create(
     rooms: CreateRoomsWithGallery[],
     boardingHouseId: number,
@@ -36,14 +38,15 @@ export class RoomsService {
       const { gallery, thumbnail, roomType, furnishingType, ...roomData } =
         room;
 
-      // Validate numeric fields
       const maxCapacity = Number(roomData.maxCapacity);
       const price = Number(roomData.price);
 
-      if (isNaN(maxCapacity) || isNaN(price)) {
-        throw new BadRequestException(
-          `Invalid number for maxCapacity or price: ${roomData.maxCapacity}, ${roomData.price}`,
-        );
+      if (!Number.isFinite(maxCapacity) || maxCapacity <= 0) {
+        throw new BadRequestException('Invalid maxCapacity value.');
+      }
+
+      if (!Number.isFinite(price) || price < 0) {
+        throw new BadRequestException('Invalid price value.');
       }
 
       const createdRoom = await tx.room.create({
@@ -57,7 +60,6 @@ export class RoomsService {
         },
       });
 
-      // Optional: Upload gallery if provided
       if (gallery?.length) {
         await this.imageService.uploadImagesTransact(
           tx,
@@ -96,41 +98,53 @@ export class RoomsService {
     }
   }
 
+  // -------------------------------------------------------
+  // FIND ALL
+  // -------------------------------------------------------
   async findAll(bhId: number) {
-    if (!bhId) throw new BadRequestException('Boarding house ID is required');
+    if (!bhId) {
+      throw new BadRequestException('Boarding house ID is required');
+    }
 
     const rooms = await this.prisma.room.findMany({
-      where: { boardingHouseId: bhId },
+      where: {
+        boardingHouseId: bhId,
+        isDeleted: false,
+      },
     });
 
-    // Fetch images for all room IDs in a single query
+    if (!rooms.length) return [];
+
     const roomIds = rooms.map((r) => r.id);
+
     const images = await this.prisma.image.findMany({
       where: {
         entityType: ResourceType.ROOM,
         entityId: { in: roomIds },
+        isDeleted: false,
       },
     });
 
-    // Merge images per room
+    // Build lookup map (O(n))
+    const imageMap = new Map<number, typeof images>();
+
+    for (const img of images) {
+      if (!imageMap.has(img.entityId)) {
+        imageMap.set(img.entityId, []);
+      }
+      imageMap.get(img.entityId)!.push(img);
+    }
+
     const roomsWithImages = await Promise.all(
       rooms.map(async (room) => {
-        const roomImages = images.filter((img) => img.entityId === room.id);
+        const roomImages = imageMap.get(room.id) ?? [];
 
-        const { gallery } = await this.imageService.getImageMetaData(
+        const { gallery, thumbnail } = await this.imageService.getImageMetaData(
           roomImages,
           (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
           ResourceType.ROOM,
           room.id,
-          [MediaType.GALLERY],
-        );
-
-        const { thumbnail } = await this.imageService.getImageMetaData(
-          roomImages,
-          (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
-          ResourceType.ROOM,
-          room.id,
-          [MediaType.THUMBNAIL],
+          [MediaType.GALLERY, MediaType.THUMBNAIL],
         );
 
         return { ...room, gallery, thumbnail };
@@ -140,89 +154,93 @@ export class RoomsService {
     return roomsWithImages;
   }
 
+  // -------------------------------------------------------
+  // FIND ONE
+  // -------------------------------------------------------
   async findOne(bhId: number, roomId: number) {
-    const prisma = this.prisma;
-    const room = await prisma.room.findFirst({
+    const room = await this.prisma.room.findFirst({
       where: {
         id: roomId,
         boardingHouseId: bhId,
+        isDeleted: false,
       },
     });
+
+    if (!room) {
+      throw new NotFoundException('Room not found.');
+    }
 
     const images = await this.prisma.image.findMany({
       where: {
-        entityId: roomId,
+        entityId: room.id,
         entityType: ResourceType.ROOM,
+        isDeleted: false,
       },
     });
 
-    const { gallery } = await this.imageService.getImageMetaData(
+    const { gallery, thumbnail } = await this.imageService.getImageMetaData(
       images,
       (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
       ResourceType.ROOM,
-      bhId,
-      [MediaType.GALLERY],
+      room.id, // ✅ fixed
+      [MediaType.GALLERY, MediaType.THUMBNAIL],
     );
-
-    const { thumbnail } = await this.imageService.getImageMetaData(
-      images,
-      (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
-      ResourceType.ROOM,
-      bhId,
-      [MediaType.THUMBNAIL],
-    );
-
-    if (!room) {
-      throw new NotFoundException(
-        'Room not found or does not belong to this boarding house.',
-      );
-    }
 
     return {
       ...room,
-      thumbnail,
       gallery,
+      thumbnail,
     };
   }
 
+  // -------------------------------------------------------
+  // PATCH
+  // -------------------------------------------------------
   async patch(roomId: number, roomData: UpdateRoomDto) {
-    const prisma = this.prisma;
-
-    // Remove undefined fields → real PATCH behavior
     const dataToUpdate = Object.fromEntries(
       Object.entries(roomData).filter(([_, v]) => v !== undefined),
     );
 
-    if (Object.keys(dataToUpdate).length === 0) {
+    if (!Object.keys(dataToUpdate).length) {
       throw new BadRequestException('No fields provided to update.');
     }
 
-    // Check if room exists
-    const existingRoom = await prisma.room.findUnique({
-      where: { id: roomId },
+    const existingRoom = await this.prisma.room.findFirst({
+      where: {
+        id: roomId,
+        isDeleted: false,
+      },
     });
 
     if (!existingRoom) {
       throw new NotFoundException(`Room with ID ${roomId} not found.`);
     }
 
-    // Perform update
-    return prisma.room.update({
-      where: { id: roomId },
-      data: dataToUpdate,
-    });
+    try {
+      return await this.prisma.room.update({
+        where: { id: roomId },
+        data: dataToUpdate,
+      });
+    } catch {
+      throw new InternalServerErrorException('Failed to update room.');
+    }
   }
 
-  remove(id: number) {
-    const prisma = this.prisma;
+  // -------------------------------------------------------
+  // REMOVE (SOFT DELETE)
+  // -------------------------------------------------------
+  async remove(id: number) {
+    const existingRoom = await this.prisma.room.findFirst({
+      where: { id, isDeleted: false },
+    });
 
-    return prisma.room.update({
-      where: {
-        id: id,
-      },
-      data: {
-        isDeleted: true,
-      },
+    if (!existingRoom) {
+      throw new NotFoundException(`Room with ID ${id} not found.`);
+    }
+
+    return this.prisma.room.update({
+      where: { id },
+      data: { isDeleted: true },
     });
   }
 }

@@ -48,6 +48,7 @@ export type BookingRejectedPayload = {
 export type BookingCancelledPayload = {
   bookingId: number;
   tenantId: number;
+  ownerId: number;
   reason?: string;
   data: BookingDataPayload;
 };
@@ -55,6 +56,7 @@ export type BookingCancelledPayload = {
 export type BookingCompletedPayload = {
   bookingId: number;
   tenantId: number;
+  ownerId: number;
   reason?: string;
   data: BookingDataPayload;
 };

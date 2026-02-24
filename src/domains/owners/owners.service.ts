@@ -27,6 +27,7 @@ import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.except
 import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-validation.utils';
 import { AuthService } from '../auth/auth.service';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
+import { GetBookingDto } from './dto/find-booking.dto';
 
 @Injectable()
 export class OwnersService {
@@ -601,6 +602,8 @@ export class OwnersService {
     const { password, ...safeOwner } = deletedOwner;
     return safeOwner;
   }
+
+  // findBooking({}: GetBookingDto) {}
 }
 
 // TODO: fixe the delete function in service which returns no record found from prisma

@@ -397,6 +397,7 @@ export class PaymentsService {
         this.bookingEventPublisher.completed({
           bookingId: payment.bookingId,
           tenantId: payment.userId,
+          ownerId: payment.ownerId,
           data: {
             bhId: booking.boardingHouseId,
             ownerId: payment.ownerId,

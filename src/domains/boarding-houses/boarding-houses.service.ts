@@ -34,7 +34,7 @@ export class BoardingHousesService {
     availabilityStatus,
     createdAt,
     updatedAt,
-    isDeleted,
+    isDeleted = false,
     deletedAt,
     minPrice = 0,
     maxPrice = 0,

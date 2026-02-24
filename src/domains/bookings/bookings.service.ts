@@ -158,7 +158,9 @@ export class BookingsService {
             roomNumber: true,
             availabilityStatus: true,
             price: true,
-            boardingHouse: { select: { id: true, name: true, ownerId: true } },
+            boardingHouse: {
+              select: { id: true, name: true, ownerId: true, address: true },
+            },
           },
         },
       },
@@ -247,25 +249,80 @@ export class BookingsService {
 
   async findOne(bookId: number) {
     if (!bookId) {
-      throw new BadRequestException('no book id provided');
+      throw new BadRequestException('Booking ID is required');
     }
 
-    const booking = await this.prisma.booking.findUnique({
+    const booking = await this.prisma.booking.findFirst({
       where: {
         id: bookId,
+        isDeleted: false,
       },
       include: {
-        tenant: true,
+        // owner: true,
+        tenant: {
+          select: {
+            id: true,
+            firstname: true,
+            lastname: true,
+          },
+        },
+        boardingHouse: true,
+        room: true,
       },
     });
 
-    if (!booking) throw new NotFoundException('Booking not found');
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
 
-    const { tenant, ...bookingWithoutTenant } = booking;
+    const roomId = booking.room.id;
+    const boardingHouseId = booking.boardingHouse.id;
+
+    // Fetch images in parallel
+    const [roomImages, bhImages] = await Promise.all([
+      this.prisma.image.findMany({
+        where: {
+          entityType: ResourceType.ROOM,
+          entityId: roomId,
+          isDeleted: false,
+        },
+      }),
+      this.prisma.image.findMany({
+        where: {
+          entityType: ResourceType.BOARDING_HOUSE,
+          entityId: boardingHouseId,
+          isDeleted: false,
+        },
+      }),
+    ]);
+
+    const { thumbnail: roomThumbnail } =
+      await this.imageService.getImageMetaData(
+        roomImages,
+        (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
+        ResourceType.ROOM,
+        roomId,
+        [MediaType.THUMBNAIL],
+      );
+
+    const { thumbnail: bhThumbnail } = await this.imageService.getImageMetaData(
+      bhImages,
+      (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
+      ResourceType.BOARDING_HOUSE,
+      boardingHouseId,
+      [MediaType.THUMBNAIL],
+    );
 
     return {
-      tenant,
-      ...bookingWithoutTenant,
+      ...booking,
+      room: {
+        ...booking.room,
+        thumbnail: roomThumbnail,
+      },
+      boardingHouse: {
+        ...booking.boardingHouse,
+        thumbnail: bhThumbnail,
+      },
     };
   }
 
@@ -460,6 +517,7 @@ export class BookingsService {
 
     this.bookingEventPublisher.cancelled({
       bookingId: bookId,
+      ownerId: booking.room.boardingHouse.ownerId,
       tenantId: updated.tenantId,
       data: {
         tenantId: updated.tenantId,

@@ -101,47 +101,100 @@ export class BookingListener {
   // =========================
   @OnEvent(BOOKING_EVENTS.CANCELLED)
   async handleBookingCancelled(payload: BookingCancelledPayload) {
-    const notification = await this.notificationsService.create({
-      recipientRole: UserRole.TENANT,
-      recipientId: payload.data.tenantId,
+    // const notification = await this.notificationsService.create({
+    //   recipientRole: UserRole.TENANT,
+    //   recipientId: payload.data.tenantId,
 
-      type: NotificationType.BOOKING_CANCELLED,
-      title: 'Booking Cancelled',
-      message: 'Your booking has been cancelled.',
+    //   type: NotificationType.BOOKING_CANCELLED,
+    //   title: 'Booking Cancelled',
+    //   message: 'Your booking has been cancelled.',
 
-      entityType: ResourceType.BOOKING,
-      entityId: payload.bookingId,
+    //   entityType: ResourceType.BOOKING,
+    //   entityId: payload.bookingId,
 
-      data: {
-        ...payload.data,
-        bookingId: payload.bookingId,
-        reason: payload.reason ?? null,
-      },
-    });
+    //   data: {
+    //     ...payload.data,
+    //     bookingId: payload.bookingId,
+    //     reason: payload.reason ?? null,
+    //   },
+    // });
+
+    await Promise.all([
+      // Notify Tenant
+      this.notificationsService.create({
+        recipientRole: UserRole.TENANT,
+        recipientId: payload.tenantId,
+        type: NotificationType.BOOKING_CANCELLED,
+        title: 'Booking Cancelled',
+        message: 'Your booking has been cancelled.',
+        entityType: ResourceType.BOOKING,
+        entityId: payload.bookingId,
+        data: {
+          ...payload.data,
+          bookingId: payload.bookingId,
+          reason: payload.reason ?? null,
+        },
+      }),
+
+      // Notify Owner
+      this.notificationsService.create({
+        recipientRole: UserRole.OWNER,
+        recipientId: payload.ownerId,
+        type: NotificationType.BOOKING_CANCELLED,
+        title: 'Booking Cancelled',
+        message: 'A booking under your property has been cancelled.',
+        entityType: ResourceType.BOOKING,
+        entityId: payload.bookingId,
+        data: {
+          ...payload.data,
+          bookingId: payload.bookingId,
+          reason: payload.reason ?? null,
+        },
+      }),
+    ]);
 
     // this.notificationEmitter.notifyUser(payload.data.tenantId, notification);
   }
 
   @OnEvent(BOOKING_EVENTS.COMPLETED)
   async handleBookingComplete(payload: BookingCompletedPayload) {
-    const notification = await this.notificationsService.create({
-      recipientRole: UserRole.TENANT,
-      recipientId: payload.data.tenantId,
+    await Promise.all([
+      this.notificationsService.create({
+        recipientRole: UserRole.TENANT,
+        recipientId: payload.data.tenantId,
 
-      type: NotificationType.BOOKING_COMPLETED,
-      title: 'Booking Completed',
-      message:
-        'Your stay has been marked as completed. Thank you for using BH Hunter!',
+        type: NotificationType.BOOKING_COMPLETED,
+        title: 'Booking Completed',
+        message: 'Your booking has been successfully confirmed.',
 
-      entityType: ResourceType.BOOKING,
-      entityId: payload.bookingId,
+        entityType: ResourceType.BOOKING,
+        entityId: payload.bookingId,
 
-      data: {
-        ...payload.data,
-        bookingId: payload.bookingId,
-        reason: payload.reason ?? null,
-      },
-    });
+        data: {
+          ...payload.data,
+          bookingId: payload.bookingId,
+          reason: payload.reason ?? null,
+        },
+      }),
+
+      this.notificationsService.create({
+        recipientRole: UserRole.OWNER,
+        recipientId: payload.data.ownerId,
+
+        type: NotificationType.BOOKING_COMPLETED,
+        title: 'Booking Completed',
+        message: 'A booking has been successfully confirmed completed',
+
+        entityType: ResourceType.BOOKING,
+        entityId: payload.bookingId,
+
+        data: {
+          ...payload.data,
+          bookingId: payload.bookingId,
+          reason: payload.reason ?? null,
+        },
+      }),
+    ]);
 
     // this.notificationEmitter.notifyUser(payload.data.tenantId, notification);
   }

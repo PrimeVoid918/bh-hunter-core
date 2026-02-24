@@ -26,6 +26,10 @@ export class FindBoardingHouseDto {
 
   @IsOptional()
   @IsString()
+  search?: string;
+
+  @IsOptional()
+  @IsString()
   address?: string;
 
   // TODO1: make a schema for ameneties, finalize the schema if applicable
@@ -53,6 +57,7 @@ export class FindBoardingHouseDto {
 
   @IsOptional()
   @IsBoolean()
+  @Type(() => Boolean) // This helps class-transformer convert the incoming type
   isDeleted?: boolean;
 
   @IsOptional()
