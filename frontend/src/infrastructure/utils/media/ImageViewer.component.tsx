@@ -12,7 +12,7 @@ import {
 } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import styled from '@emotion/styled';
-import { Colors } from '@/features/constants';
+import { Colors } from '@/pages/constants';
 import { useBreakpointValue } from '@chakra-ui/react';
 
 type ImageViewerProps = {

@@ -119,7 +119,15 @@ class LogoService {
     };
   }
 
-  public getPng(ratio: Ratio, theme: Theme, size: Size): string {
+  public getPng({
+    ratio,
+    theme,
+    size,
+  }: {
+    ratio: Ratio;
+    theme: Theme;
+    size: Size;
+  }): string {
     return this.logos[ratio][theme][size]; // Only PNG path
   }
 

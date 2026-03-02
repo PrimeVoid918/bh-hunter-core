@@ -1,13 +1,13 @@
 // src/navigation/useTypedNavigate.ts
 import { useNavigate } from 'react-router-dom';
-import type { RootRoutes } from './types';
+import type { RootRoutesInterface } from './types';
 
 export function useTypedRootNavigation() {
   const navigate = useNavigate();
 
-  return function navigateTo<T extends keyof RootRoutes>(
+  return function navigateTo<T extends keyof RootRoutesInterface>(
     route: T,
-    params?: RootRoutes[T],
+    params?: RootRoutesInterface[T],
   ) {
     let path: string = route as string; // <-- cast to string
 

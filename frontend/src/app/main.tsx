@@ -1,4 +1,3 @@
-
 import { pdfjs } from 'react-pdf';
 import 'pdfjs-dist/legacy/web/pdf_viewer.css';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -16,15 +15,19 @@ import { RouterProvider } from 'react-router-dom';
 import RootNavigator from './navigation/RootNavigator';
 import { store } from './store/stores';
 
-import './index.css';
+import './css/index.css';
 import { Provider } from 'react-redux';
+import { ThemeProvider } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import muiTheme from './config/muiTheme';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Provider store={store}>
-      <ChakraProvider>
+      <ThemeProvider theme={muiTheme}>
+        <CssBaseline />
         <RouterProvider router={RootNavigator()} />
-      </ChakraProvider>
+      </ThemeProvider>
     </Provider>
   </StrictMode>,
 );

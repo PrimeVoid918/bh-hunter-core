@@ -1,18 +1,17 @@
 import { createBrowserRouter, Outlet } from 'react-router-dom';
-import LandingPage from '@/features/landing/landing-page';
 import { PrivateRouteGuard } from '@/infrastructure/guards/route-guards/private-routes.guard';
-import AdminNavigator from '@/features/admins/navigation/admins.navigator';
-import AuthNavigator from '@/features/auth/navigation/auth.navigator';
-import Error404Page from '@/features/shared/screens/Error-404.page';
+import AdminNavigator from '@/pages/admins/navigation/admins.navigator';
+import AuthNavigator from '@/pages/auth/navigation/auth.navigator';
+import Error404Page from '@/pages/shared/screens/Error-404.page';
+import LandingNavigator from '@/pages/landing/navigations/landing.navigator';
 
 export default function RootNavigator() {
   const adminNav = AdminNavigator();
   return createBrowserRouter([
     {
-      path: '/', //* route
       element: <RootLayout />, //* screen
       children: [
-        { index: true, element: <LandingPage /> }, //* default screen
+        { ...LandingNavigator() }, //* default screen
         { ...AuthNavigator() },
         {
           ...adminNav,

@@ -2,7 +2,7 @@ import { Document, Page } from 'react-pdf';
 import { Box, Spinner, Center, useColorMode } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import styled from '@emotion/styled';
-import { Colors } from '@/features/constants';
+import { Colors } from '@/pages/constants';
 import { useBreakpointValue } from '@chakra-ui/react';
 import {
   Button,
