@@ -32,6 +32,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { NotificationsModule } from './domains/notifications/notifications.module';
 import { AccountsModule } from './domains/accounts/accounts.module';
 import { MetricsModule } from './domains/metrics/metrics.module';
+import { SubscriptionsModule } from './domains/subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { MetricsModule } from './domains/metrics/metrics.module';
     NotificationsModule,
     AccountsModule,
     MetricsModule,
+    SubscriptionsModule,
   ],
   controllers: [AppController],
   providers: [

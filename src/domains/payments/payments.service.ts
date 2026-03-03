@@ -22,6 +22,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { PaymongoWebhookPayload } from './dto/types';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
 import axios, { AxiosError, AxiosResponse } from 'axios';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 interface CreateBookingPaymentInput {
   bookingId: number;
@@ -43,6 +44,7 @@ export class PaymentsService {
     @Inject('PAYMENT_PROVIDER')
     private readonly provider: PaymentProviderAdapter,
     private readonly bookingEventPublisher: BookingEventPublisher,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   private get prisma() {
@@ -119,6 +121,57 @@ export class PaymentsService {
         status: PaymentStatus.PENDING,
         bookingId: booking.id,
         provider: PaymentProvider.PAYMONGO,
+      },
+    });
+
+    const link = await this.provider.createPaymentLink(payment);
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        providerPaymentLinkId: link.id,
+        providerPaymentIntentId: link.paymentIntentId,
+        status: PaymentStatus.REQUIRES_ACTION,
+      },
+    });
+
+    return {
+      paymentId: payment.id,
+      checkoutUrl: link.checkoutUrl,
+    };
+  }
+
+  async createSubscriptionPayment(input: { ownerId: number; planId: string }) {
+    const { ownerId, planId } = input;
+
+    const owner = await this.prisma.owner.findUnique({
+      where: { id: ownerId },
+    });
+
+    if (!owner) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    const plan = this.subscriptionsService.getPlanById(planId);
+
+    if (!plan) {
+      throw new BadRequestException('Invalid subscription plan');
+    }
+
+    const payment = await this.prisma.payment.create({
+      data: {
+        userId: ownerId,
+        userType: ResourceType.OWNER,
+        ownerId,
+        amount: new Prisma.Decimal(plan.totalPrice),
+        currency: CurrencyType.PHP,
+        purchaseType: PurchaseType.SUBSCRIPTION,
+        status: PaymentStatus.PENDING,
+        provider: PaymentProvider.PAYMONGO,
+        metadata: {
+          type: 'subscription',
+          planId: plan.id,
+        },
       },
     });
 
@@ -315,14 +368,12 @@ export class PaymentsService {
 
     let payment: Payment | null = null;
 
-    // 1️⃣ Try metadata first
     if (paymentAttributes?.metadata?.paymentId) {
       payment = await this.prisma.payment.findUnique({
         where: { id: Number(paymentAttributes.metadata.paymentId) },
       });
     }
 
-    // 2️⃣ Fallback to payment_intent_id
     if (!payment && paymentAttributes?.payment_intent_id) {
       payment = await this.prisma.payment.findFirst({
         where: {
@@ -375,9 +426,8 @@ export class PaymentsService {
 
   private async markPaymentPaid(payment: Payment) {
     if (
-      ![PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION].includes(
-        payment.status as 'PENDING' | 'REQUIRES_ACTION',
-      )
+      payment.status !== PaymentStatus.PENDING &&
+      payment.status !== PaymentStatus.REQUIRES_ACTION
     ) {
       return { ignored: true };
     }
@@ -388,15 +438,65 @@ export class PaymentsService {
         data: { status: PaymentStatus.PAID },
       });
 
-      if (payment.bookingId) {
+      //! Subscription
+      if (payment.purchaseType === PurchaseType.SUBSCRIPTION) {
+        if (!payment.ownerId) {
+          throw new Error('Subscription payment missing ownerId');
+        }
+
+        const metadata = payment.metadata as { planId?: string } | null;
+
+        if (!metadata?.planId) {
+          throw new Error('Subscription payment missing planId');
+        }
+
+        const plan = this.subscriptionsService.getPlanById(metadata.planId);
+
+        if (!plan) {
+          throw new Error('Invalid subscription plan in payment metadata');
+        }
+
+        const now = new Date();
+        const expiresAt = new Date(now);
+        expiresAt.setMonth(now.getMonth() + plan.durationMonths);
+
+        await tx.subscription.updateMany({
+          where: {
+            ownerId: payment.ownerId,
+            status: 'ACTIVE',
+          },
+          data: { status: 'EXPIRED' },
+        });
+
+        await tx.subscription.create({
+          data: {
+            ownerId: payment.ownerId,
+            type: 'PAID',
+            status: 'ACTIVE',
+            startedAt: now,
+            expiresAt,
+            provider: payment.provider,
+            providerReferenceId: payment.providerPaymentIntentId,
+          },
+        });
+
+        return;
+      }
+
+      //! Subscription
+      if (payment.purchaseType === PurchaseType.ROOM_BOOKING) {
+        if (!payment.bookingId) {
+          throw new Error('Booking payment missing bookingId');
+        }
+
         const booking = await tx.booking.update({
           where: { id: payment.bookingId },
           data: { status: BookingStatus.COMPLETED_BOOKING },
         });
 
         this.bookingEventPublisher.completed({
-          bookingId: payment.bookingId,
-          tenantId: payment.userId,
+          bookingId: booking.id,
+          tenantId: booking.tenantId,
           ownerId: payment.ownerId,
           data: {
             bhId: booking.boardingHouseId,

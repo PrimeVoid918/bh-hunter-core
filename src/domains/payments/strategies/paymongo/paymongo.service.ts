@@ -4,7 +4,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import axios, { AxiosError, AxiosResponse } from 'axios';
-import { Payment, PaymentStatus } from '@prisma/client';
+import { Payment, PaymentStatus, PurchaseType } from '@prisma/client';
 import { ConfigService } from 'src/config/config.service';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 
@@ -115,6 +115,8 @@ export class PaymongoService {
   }
 
   async createPaymentLink(payment: Payment) {
+    const isSubscription = payment.purchaseType === PurchaseType.SUBSCRIPTION;
+
     const sessionPayload = {
       data: {
         attributes: {
@@ -129,16 +131,22 @@ export class PaymongoService {
             {
               amount: Math.round(Number(payment.amount) * 100),
               currency: payment.currency,
-              name: `Booking #${payment.bookingId}`,
+              name: isSubscription
+                ? 'BH Hunter Owner Subscription'
+                : `Booking #${payment.bookingId}`,
               quantity: 1,
             },
           ],
-          description: `Booking payment for room`,
+          description: isSubscription
+            ? 'Owner subscription payment'
+            : 'Booking payment for room',
+
           success_url: 'bhhunter://payment-success',
           cancel_url: 'bhhunter://payment-cancel',
+
           metadata: {
             paymentId: String(payment.id),
-            bookingId: String(payment.bookingId),
+            ...(payment.metadata ?? {}),
           },
         },
       },
@@ -152,15 +160,12 @@ export class PaymongoService {
 
     const sessionData = res.data.data;
 
-    const checkoutUrl = sessionData.attributes.checkout_url;
-    const paymentIntentId =
-      sessionData.attributes.payment_intent?.id ||
-      sessionData.attributes.payment_intent_id;
-
     return {
       id: sessionData.id,
-      paymentIntentId,
-      checkoutUrl,
+      paymentIntentId:
+        sessionData.attributes.payment_intent?.id ??
+        sessionData.attributes.payment_intent_id,
+      checkoutUrl: sessionData.attributes.checkout_url,
     };
   }
 

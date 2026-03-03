@@ -65,11 +65,10 @@ enum PaymentStatus {
 }
 
 enum SubscriptionStatus {
-  ACTIVE
   INACTIVE
-  CANCELLED
+  ACTIVE
   EXPIRED
-  PAST_DUE
+  CANCELLED
 }
 
 enum PurchaseType {
@@ -229,6 +228,7 @@ model Owner {
   isDeleted                    Boolean                @default(false)
   deletedAt                    DateTime?
   verificationDocuments        VerificationDocument[] // permit relation
+  subscriptions                Subscription[]
 }
 
 model OwnerPayoutMethod {
@@ -390,19 +390,27 @@ model Payout {
   paidAt    DateTime?
 }
 
+enum SubscriptionType {
+  TRIAL
+  PAID
+}
+
 model Subscription {
   id Int @id @default(autoincrement())
 
-  userId   Int
-  userType ResourceType
+  ownerId Int
+  owner   Owner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  provider               PaymentProvider @default(PAYMONGO)
-  providerSubscriptionId String          @unique
+  type SubscriptionType
+
+  provider PaymentProvider?
+
+  providerReferenceId String? @unique
 
   status SubscriptionStatus @default(INACTIVE)
 
-  currentPeriodStart DateTime
-  currentPeriodEnd   DateTime
+  startedAt DateTime
+  expiresAt DateTime
 
   metadata Json?
 
@@ -410,6 +418,8 @@ model Subscription {
   updatedAt DateTime @updatedAt
 
   payments Payment[]
+
+  @@index([ownerId])
 }
 
 model Room {
