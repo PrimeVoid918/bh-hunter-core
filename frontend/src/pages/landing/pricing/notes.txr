@@ -1,0 +1,11 @@
+🎯 Final Recommended Flow (Clean, Defensible)
+Owner opens subscription page (web)
+Selects plan
+If not logged in → login → redirect back
+Click Buy Plan
+Redirect to PayMongo
+Return to /subscription/processing
+Poll backend until webhook activates
+Redirect to /subscription/success
+Show receipt details
+Mobile app auto-unlocks features on next fetch

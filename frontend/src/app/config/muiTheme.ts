@@ -1,7 +1,8 @@
 import { Spacing } from '@/pages/constants';
 import { createTheme } from '@mui/material/styles';
+import { createContext } from 'react';
 
-const muiTheme = createTheme({
+export const muiTheme = createTheme({
   cssVariables: true,
   palette: {
     primary: {
@@ -48,4 +49,37 @@ const muiTheme = createTheme({
   },
 });
 
-export default muiTheme;
+export const ColorModeContext = createContext({ toggleColorMode: () => {} });
+
+export const getDesignTokens = (mode: 'light' | 'dark') => ({
+  palette: {
+    mode,
+    primary: {
+      main: mode === 'light' ? '#357FC1' : '#90CAF9',
+      light: '#D6ECFA',
+      dark: '#123969',
+      contrastText: '#FFFFFF',
+    },
+    background: {
+      // Google-style Dark Navy/Grey
+      default: mode === 'light' ? '#F7F9FC' : '#0F172A',
+      paper: mode === 'light' ? '#FFFFFF' : '#1E293B',
+    },
+    text: {
+      primary: mode === 'light' ? '#1A1A1A' : '#F8FAFC',
+      secondary: mode === 'light' ? '#4A4A4A' : '#94A3B8',
+    },
+  },
+  shape: { borderRadius: 12 },
+  typography: {
+    fontFamily: "'Poppins', sans-serif",
+    button: { textTransform: 'none' as const, fontWeight: 500 },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: { borderRadius: '100px', padding: '10px 24px' },
+      },
+    },
+  },
+});

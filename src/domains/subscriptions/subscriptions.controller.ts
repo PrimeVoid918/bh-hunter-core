@@ -11,7 +11,6 @@ import {
 } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { PaymentsService } from '../payments/payments.service';
-import { Prisma } from '@prisma/client';
 
 @Controller('subscriptions')
 export class SubscriptionsController {
@@ -25,10 +24,10 @@ export class SubscriptionsController {
     return this.subscriptionsService.getPlans();
   }
 
-  // @Get('plans/:id')
-  // getPlansById() {
-  //   return this.subscriptionsService.getPlans();
-  // }
+  @Get('plans/:planId')
+  getPlansById(@Param('planId') planId: string) {
+    return this.subscriptionsService.getPlanById(planId);
+  }
 
   // 🔹 Create subscription checkout (for payment)
   @Post(':ownerId/checkout')

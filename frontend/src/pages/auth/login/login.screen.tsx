@@ -93,6 +93,7 @@ export default function LoginScreen() {
               >
                 Sign in
               </Button>
+              <button onClick={handleLogin}> Sign In</button>
               <Button
                 colorScheme={'blue'}
                 variant={'solid'}

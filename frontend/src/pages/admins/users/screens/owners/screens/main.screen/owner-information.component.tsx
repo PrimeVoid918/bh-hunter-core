@@ -1,6 +1,6 @@
 import { Colors } from '@/pages/constants';
 import AsyncState from '@/pages/shared/components/async-state/AsyncState';
-import { useGetOneQuery } from '@/infrastructure/owner/owner.redux.slice';
+import { useGetOneQuery } from '@/infrastructure/owner/owner.redux.api';
 import { parseIsoDate } from '@/infrastructure/utils/parseISODate.util';
 import {
   Badge,

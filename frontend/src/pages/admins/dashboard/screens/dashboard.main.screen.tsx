@@ -6,7 +6,7 @@ import { Colors } from '@/pages/constants';
 import BaseWrapper from '@/pages/shared/layouts/wrappers/base-wrapper';
 
 // Motion-enhanced Box
-const MotionBox = motion(Box);
+// const MotionBox = motion(Box);
 
 export default function DashboardMainScreen() {
   return (
@@ -32,7 +32,7 @@ export default function DashboardMainScreen() {
   );
 }
 
-const Container = styled(MotionBox)`
+const Container = styled.div`
   border: 1px solid green;
   width: 100%;
   height: 100%;

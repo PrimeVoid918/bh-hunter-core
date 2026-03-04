@@ -21,6 +21,7 @@ import { SocketGateway } from 'src/infrastructure/sockets/sockets.gateway';
 import { NotificationGateway } from 'src/infrastructure/sockets/notification/notification.gateway';
 import { AdminsPublisher } from '../admins/events/admins.publisher';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Module({
   imports: [],
@@ -54,6 +55,7 @@ import { AccountsPublisher } from '../accounts/accounts.publisher';
     NotificationGateway,
     AdminsPublisher,
     AccountsPublisher,
+    SubscriptionsService,
   ],
   exports: ['PAYMENT_PROVIDER'],
 })

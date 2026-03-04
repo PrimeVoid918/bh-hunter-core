@@ -6,17 +6,24 @@ import {
   Container,
   Stack,
   Divider,
+  useTheme,
 } from '@mui/material';
 import { Link as LinkRouterDom } from 'react-router-dom';
 import logoService from '@/assets/logo/logo.service';
 import EmailIcon from '@mui/icons-material/Email';
 
 export default function Footer() {
-  const logoUrl = logoService.getPng({
-    ratio: '1:1',
-    theme: 'dark',
-    size: 128,
-  });
+  const theme = useTheme();
+  const isDarkMode = theme.palette.mode === 'dark';
+  const logoUrl = React.useMemo(
+    () =>
+      logoService.getPng({
+        ratio: '1:1',
+        theme: isDarkMode ? 'light' : 'dark', // Fixed: logo should contrast the mode
+        size: 128,
+      }),
+    [isDarkMode],
+  );
 
   return (
     <Box

@@ -53,11 +53,16 @@ export default defineConfig({
     ),
   },
   // server: {
+  //   host: true,
+  //   port: 5173,
   //   proxy: {
   //     '/api': {
-  //       target: 'http://localhost:3000',
+  //       target: `http://${LOCAL_IP}:3000`,
   //       changeOrigin: true,
-  //       secure: false,
+  //     },
+  //     '/media': {
+  //       target: `http://${LOCAL_IP}:3000`,
+  //       changeOrigin: true,
   //     },
   //   },
   // },
@@ -66,11 +71,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: `http://${LOCAL_IP}:3000`,
+        // Use localhost or 127.0.0.1 for internal proxying
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
+        secure: false,
+        // This ensures /api/user stays /api/user when it hits NestJS
+        rewrite: (path) => path,
       },
       '/media': {
-        target: `http://${LOCAL_IP}:3000`,
+        target: 'http://127.0.0.1:3000',
         changeOrigin: true,
       },
     },

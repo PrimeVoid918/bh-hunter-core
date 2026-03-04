@@ -4,6 +4,7 @@ import { PaymentsController } from './payments.controller';
 import { ConfigModule } from '@nestjs/config';
 import { PaymongoService } from './strategies/paymongo/paymongo.service';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Module({
   imports: [ConfigModule],
@@ -12,6 +13,7 @@ import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
     PaymentsService,
     PaymongoService,
     BookingEventPublisher,
+    SubscriptionsService,
     {
       provide: 'PAYMENT_PROVIDER',
       useClass: PaymongoService,

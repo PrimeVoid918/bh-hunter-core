@@ -117,6 +117,14 @@ export class PaymongoService {
   async createPaymentLink(payment: Payment) {
     const isSubscription = payment.purchaseType === PurchaseType.SUBSCRIPTION;
 
+    const successUrl = isSubscription
+      ? 'https://bhhph.online/pricing/success'
+      : 'bhhunter://payment-success';
+
+    const cancelUrl = isSubscription
+      ? 'https://bhhph.online/pricing/cancel'
+      : 'bhhunter://payment-cancel';
+
     const sessionPayload = {
       data: {
         attributes: {
@@ -141,12 +149,12 @@ export class PaymongoService {
             ? 'Owner subscription payment'
             : 'Booking payment for room',
 
-          success_url: 'bhhunter://payment-success',
-          cancel_url: 'bhhunter://payment-cancel',
+          success_url: successUrl,
+          cancel_url: cancelUrl,
 
           metadata: {
             paymentId: String(payment.id),
-            ...(payment.metadata ?? {}),
+            ...((payment.metadata as object) ?? {}), //!!!!!
           },
         },
       },

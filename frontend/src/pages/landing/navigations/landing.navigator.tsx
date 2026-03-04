@@ -4,7 +4,7 @@ import LandingPage from '../landing/landing-page';
 import DownloadsPage from '../downloads/downloads.page';
 import AboutPage from '../about/about.page';
 import LegalPage from '../legal/legal';
-import PricingPage from '../pricing/pricing.page';
+import PricingNavigator from '../pricing/navigation/pricing.navigator';
 
 export default function LandingNavigator() {
   return {
@@ -15,7 +15,7 @@ export default function LandingNavigator() {
       { path: 'download', element: <DownloadsPage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'legal', element: <LegalPage /> },
-      { path: 'pricing', element: <PricingPage /> },
+      { ...PricingNavigator() },
     ],
   };
 }

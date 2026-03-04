@@ -2,13 +2,15 @@
 import { z } from 'zod';
 import { BaseUserSchema } from '../user/user.types';
 // import { BoardingHousesIdList } from '../boarding-houses/boarding-house.types';
-import { PermitMetaData } from '../valid-docs/permits.types';
+// import { PermitMetaData } from '../valid-docs/permits.types';
+// import { PermitMetaData } from '@/infrastructure/permits/permits.types';
+import { VerificationDocumentMetaData } from '../../../../dist/domains/verifications/types/permit.types';
+// import PermitMeta
 
 // Base schema
 export const OwnerSchema = BaseUserSchema.extend({
   role: z.literal('OWNER').optional(),
-  // boardingHouses: z.array(z.custom<BoardingHousesIdList>()).optional(),
-  permits: z.array(z.custom<PermitMetaData>()).optional(),
+  permits: z.array(z.custom<VerificationDocumentMetaData>()).optional(),
 });
 export type Owner = z.infer<typeof OwnerSchema>;
 
