@@ -12,7 +12,7 @@
 # Logs
 logs
 *.log
-!frontend/src/features/admins/logs/
+!frontend/src/pages/admins/logs/
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*

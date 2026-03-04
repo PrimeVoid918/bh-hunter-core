@@ -24,4 +24,4 @@ dist-ssr
 *.sw?
 
 # Special dirs
-!frontend/src/pages/admins/logs/
+!src/pages/admins/logs/
