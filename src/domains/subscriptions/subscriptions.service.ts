@@ -34,36 +34,51 @@ export class SubscriptionsService {
       throw new BadRequestException('OwnerId is required');
     }
 
-    const owner = await this.prisma.owner.findUnique({
-      where: { id: ownerId },
-    });
-    if (!owner) {
-      throw new BadRequestException('Owner not found');
-    }
+    // using transaction to make trial creation atomic
+    return this.prisma.$transaction(async (tx) => {
+      const owner = await tx.owner.findUnique({ where: { id: ownerId } });
+      if (!owner) {
+        throw new BadRequestException('Owner not found');
+      }
 
-    // Expire any existing active subscriptions
-    await this.prisma.subscription.updateMany({
-      where: {
-        ownerId,
-        status: SubscriptionStatus.ACTIVE,
-      },
-      data: {
-        status: SubscriptionStatus.EXPIRED,
-      },
-    });
+      // check if is already active trial
+      const existingTrial = await tx.subscription.findFirst({
+        where: {
+          ownerId,
+          type: SubscriptionType.TRIAL,
+          status: SubscriptionStatus.ACTIVE,
+          expiresAt: { gt: new Date() },
+        },
+      });
 
-    const now = new Date();
-    const expiresAt = new Date(now);
-    expiresAt.setDate(now.getDate() + 30); // 30-day trial
+      if (existingTrial) {
+        return existingTrial; // return existing trial instead of creating new
+      }
 
-    return this.prisma.subscription.create({
-      data: {
-        ownerId,
-        type: SubscriptionType.TRIAL,
-        status: SubscriptionStatus.ACTIVE,
-        startedAt: now,
-        expiresAt,
-      },
+      // expire any other active subscriptions
+      await tx.subscription.updateMany({
+        where: {
+          ownerId,
+          status: SubscriptionStatus.ACTIVE,
+        },
+        data: { status: SubscriptionStatus.EXPIRED },
+      });
+
+      const now = new Date();
+      const expiresAt = new Date(now);
+      expiresAt.setDate(now.getDate() + 30);
+
+      const trial = await tx.subscription.create({
+        data: {
+          ownerId,
+          type: SubscriptionType.TRIAL,
+          status: SubscriptionStatus.ACTIVE,
+          startedAt: now,
+          expiresAt,
+        },
+      });
+
+      return trial;
     });
   }
 

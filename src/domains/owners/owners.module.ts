@@ -17,6 +17,7 @@ import { AdminsService } from '../admins/admins.service';
 import { ImageService } from 'src/infrastructure/image/image.service';
 import { AdminsPublisher } from '../admins/events/admins.publisher';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Module({
   imports: [VerificationModule, DocumentModule],
@@ -31,7 +32,7 @@ import { AccountsPublisher } from '../accounts/accounts.publisher';
     FileOpsUtils,
     {
       provide: 'BASE_DIR',
-      useValue: 'media', // or your base directory path
+      useValue: 'media',
     },
     Logger,
     AuthService,
@@ -41,6 +42,7 @@ import { AccountsPublisher } from '../accounts/accounts.publisher';
     TenantsService,
     AdminsService,
     ImageService,
+    SubscriptionsService,
   ],
   exports: [OwnersService],
 })

@@ -1,6 +1,4 @@
-// src/infrastructure/socket/socket.module.ts
 import { Module, Global } from '@nestjs/common';
-// import { NotificationsGateway } from './sockets.module';
 import { JwtModule } from '@nestjs/jwt'; // You'll likely need this for auth later
 import { GameGateway } from './game.gateway';
 import { RpsService } from 'src/domains/games/rps.service';
@@ -21,8 +19,9 @@ import { AuthService } from 'src/domains/auth/auth.service';
 import { CryptoService } from 'src/domains/auth/utilities/crypto.service';
 import { AdminsPublisher } from 'src/domains/admins/events/admins.publisher';
 import { AccountsPublisher } from 'src/domains/accounts/accounts.publisher';
+import { SubscriptionsService } from 'src/domains/subscriptions/subscriptions.service';
 
-@Global() // Making it global allows any domain to inject the Gateway easily
+@Global()
 @Module({
   imports: [JwtModule.register({})],
   providers: [
@@ -43,12 +42,13 @@ import { AccountsPublisher } from 'src/domains/accounts/accounts.publisher';
     AuthService,
     CryptoService,
     AdminsPublisher,
+    SubscriptionsService,
     {
       provide: 'BASE_DIR',
-      useValue: 'media', // or your base directory path
+      useValue: 'media',
     },
     { provide: APP_GUARD, useClass: WsAuthGuard },
   ],
-  exports: [GameGateway], // Export it so other modules can use 'sendNotification'
+  exports: [GameGateway],
 })
 export class SocketModule {}

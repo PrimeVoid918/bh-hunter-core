@@ -12,22 +12,23 @@ export const subscriptionsApi = createApi({
     baseUrl: BACKEND_API,
   }),
   endpoints: (builder) => ({
-    // 🔹 GET /subscriptions/plans
+    // ✅ GET ALL PLANS
     getPlans: builder.query<SubscriptionPlan[], void>({
       query: () => `${subscriptionApiRoute}/plans`,
       transformResponse: (response: ApiResponseType<SubscriptionPlan[]>) =>
-        response.results ?? [],
+        response.results,
       providesTags: ['SubscriptionPlans'],
     }),
 
-    getPlansById: builder.query<SubscriptionPlan, { planId: string | null }>({
+    // ✅ GET PLAN BY ID
+    getPlansById: builder.query<SubscriptionPlan | null, { planId: string }>({
       query: ({ planId }) => `${subscriptionApiRoute}/plans/${planId}`,
       transformResponse: (response: ApiResponseType<SubscriptionPlan>) =>
-        response.results ?? [],
+        response.results ?? null,
       providesTags: ['SubscriptionPlans'],
     }),
 
-    // 🔹 POST /subscriptions/:ownerId/checkout
+    // ✅ CREATE CHECKOUT
     createCheckout: builder.mutation<
       { paymentId: number; checkoutUrl: string },
       { ownerId: number; planId: string }
@@ -37,27 +38,35 @@ export const subscriptionsApi = createApi({
         method: 'POST',
         body: { planId },
       }),
+      transformResponse: (
+        response: ApiResponseType<{
+          paymentId: number;
+          checkoutUrl: string;
+        }>,
+      ) => response.results,
     }),
 
-    // 🔹 POST /subscriptions/trial
+    // ✅ CREATE TRIAL
     createTrial: builder.mutation<Subscription, { ownerId: number }>({
       query: ({ ownerId }) => ({
         url: `${subscriptionApiRoute}/trial`,
         method: 'POST',
         body: { ownerId },
       }),
+      transformResponse: (response: ApiResponseType<Subscription>) =>
+        response.results,
       invalidatesTags: ['Subscription'],
     }),
 
-    // 🔹 GET /subscriptions?ownerId=
+    // ✅ GET ALL SUBSCRIPTIONS
     getAll: builder.query<Subscription[], number>({
       query: (ownerId) => `${subscriptionApiRoute}?ownerId=${ownerId}`,
       transformResponse: (response: ApiResponseType<Subscription[]>) =>
-        response.results ?? [],
+        response.results,
       providesTags: ['Subscription'],
     }),
 
-    // 🔹 GET /subscriptions/active/:ownerId
+    // ✅ GET ACTIVE
     getActive: builder.query<Subscription | null, number>({
       query: (ownerId) => `${subscriptionApiRoute}/active/${ownerId}`,
       transformResponse: (response: ApiResponseType<Subscription>) =>
@@ -67,21 +76,25 @@ export const subscriptionsApi = createApi({
       ],
     }),
 
-    // 🔹 PATCH /subscriptions/expire/:id
+    // ✅ EXPIRE
     expire: builder.mutation<Subscription, number>({
       query: (id) => ({
         url: `${subscriptionApiRoute}/expire/${id}`,
         method: 'PATCH',
       }),
+      transformResponse: (response: ApiResponseType<Subscription>) =>
+        response.results,
       invalidatesTags: ['Subscription'],
     }),
 
-    // 🔹 DELETE /subscriptions/:id
+    // ✅ DELETE
     delete: builder.mutation<Subscription, number>({
       query: (id) => ({
         url: `${subscriptionApiRoute}/${id}`,
         method: 'DELETE',
       }),
+      transformResponse: (response: ApiResponseType<Subscription>) =>
+        response.results,
       invalidatesTags: ['Subscription'],
     }),
   }),

@@ -22,6 +22,7 @@ import { AdminsPublisher } from '../admins/events/admins.publisher';
 import { VerificationListener } from './listeners/verification.listener';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
 import { AccountsListener } from './listeners/accounts.listener';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Module({
   imports: [],
@@ -49,9 +50,10 @@ import { AccountsListener } from './listeners/accounts.listener';
     FileOpsUtils,
     CryptoService,
     AdminsPublisher,
+    SubscriptionsService,
     {
       provide: 'BASE_DIR',
-      useValue: 'media', // or your base directory path
+      useValue: 'media',
     },
   ],
   exports: [NotificationsService, NotificationEmitter],

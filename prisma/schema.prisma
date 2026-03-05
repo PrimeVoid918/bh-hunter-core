@@ -62,6 +62,7 @@ enum PaymentStatus {
   FAILED
   CANCELLED
   REFUNDED
+  EXPIRED
 }
 
 enum SubscriptionStatus {

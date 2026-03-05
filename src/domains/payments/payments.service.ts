@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -158,38 +159,93 @@ export class PaymentsService {
       throw new BadRequestException('Invalid subscription plan');
     }
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        userId: ownerId,
-        userType: ResourceType.OWNER,
-        ownerId,
-        amount: new Prisma.Decimal(plan.totalPrice),
-        currency: CurrencyType.PHP,
-        purchaseType: PurchaseType.SUBSCRIPTION,
-        status: PaymentStatus.PENDING,
-        provider: PaymentProvider.PAYMONGO,
-        metadata: {
-          type: 'subscription',
-          planId: plan.id,
+    if (owner.verificationLevel !== 'FULLY_VERIFIED') {
+      throw new ForbiddenException(
+        'Owner must be fully verified before subscribing.',
+      );
+    }
+
+    const existingActiveSubscription = await this.prisma.subscription.findFirst(
+      {
+        where: {
+          ownerId,
+          status: 'ACTIVE',
+          expiresAt: { gt: new Date() },
         },
       },
+    );
+
+    if (existingActiveSubscription) {
+      throw new BadRequestException(
+        'Owner already has an active subscription.',
+      );
+    }
+
+    // ✅ Transaction: expire old + create new payment
+    const payment = await this.prisma.$transaction(async (tx) => {
+      await tx.payment.updateMany({
+        where: {
+          ownerId,
+          purchaseType: PurchaseType.SUBSCRIPTION,
+          status: {
+            in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+          },
+        },
+        data: {
+          status: PaymentStatus.EXPIRED,
+        },
+      });
+
+      const newPayment = await tx.payment.create({
+        data: {
+          userId: ownerId,
+          userType: ResourceType.OWNER,
+          ownerId,
+          amount: new Prisma.Decimal(plan.totalPrice),
+          currency: CurrencyType.PHP,
+          purchaseType: PurchaseType.SUBSCRIPTION,
+          status: PaymentStatus.PENDING,
+          provider: PaymentProvider.PAYMONGO,
+          metadata: {
+            type: 'subscription',
+            planId: plan.id,
+          },
+        },
+      });
+
+      return newPayment;
     });
 
-    const link = await this.provider.createPaymentLink(payment);
+    // ✅ Call external provider OUTSIDE transaction
+    try {
+      const link = await this.provider.createPaymentLink(payment);
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        providerPaymentLinkId: link.id,
-        providerPaymentIntentId: link.paymentIntentId,
-        status: PaymentStatus.REQUIRES_ACTION,
-      },
-    });
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          providerPaymentLinkId: link.id,
+          providerPaymentIntentId: link.paymentIntentId,
+          status: PaymentStatus.REQUIRES_ACTION,
+        },
+      });
 
-    return {
-      paymentId: payment.id,
-      checkoutUrl: link.checkoutUrl,
-    };
+      return {
+        paymentId: payment.id,
+        checkoutUrl: link.checkoutUrl,
+      };
+    } catch (error: any) {
+      console.error(error);
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: PaymentStatus.FAILED,
+        },
+      });
+
+      throw new InternalServerErrorException(
+        'Failed to initialize payment session.',
+      );
+    }
   }
 
   /** Handle webhook from PayMongo to confirm payment */

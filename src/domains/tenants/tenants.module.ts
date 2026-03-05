@@ -16,6 +16,7 @@ import { AdminsService } from '../admins/admins.service';
 import { OwnersService } from '../owners/owners.service';
 import { AdminsPublisher } from '../admins/events/admins.publisher';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Module({
   imports: [VerificationModule, ImageModule],
@@ -36,6 +37,7 @@ import { AccountsPublisher } from '../accounts/accounts.publisher';
     JwtService,
     AdminsService,
     OwnersService,
+    SubscriptionsService,
   ],
   exports: [TenantsService],
 })

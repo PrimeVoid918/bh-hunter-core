@@ -77,6 +77,11 @@ export class OwnersController {
   findPermitStatus(@Param('id', ParseIntPipe) id: string) {
     return this.ownersService.getVerificationStatus(+id);
   }
+  @Get(':id/access-status')
+  getAccessStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.ownersService.getOwnerAccessStatus(id);
+  }
+
   @Delete(':ownerId/permits/:permitId')
   async deletePermit(
     @Param('ownerId', ParseIntPipe) ownerId: number,

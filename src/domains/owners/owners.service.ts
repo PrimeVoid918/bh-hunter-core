@@ -7,18 +7,13 @@ import {
   HttpException,
   ConflictException,
   forwardRef,
+  ForbiddenException,
 } from '@nestjs/common';
 import { CreateOwnerDto } from './dto/create-owner.dto';
 import { UpdateOwnerDto } from './dto/update-owner.dto';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { FindOwnersDto } from './dto/find-owners.dto';
-import {
-  MediaType,
-  Owner,
-  Prisma,
-  UserRole,
-  VerificationType,
-} from '@prisma/client';
+import { MediaType, Owner, Prisma, UserRole } from '@prisma/client';
 import { VerifcationService } from '../verifications/verification.service';
 import { CreateVerifcationDto } from 'src/domains/verifications/dto/create-verifcation.dto';
 import { UpdateVerifcationDto } from 'src/domains/verifications/dto/update-verifcation.dto';
@@ -27,17 +22,18 @@ import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.except
 import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-validation.utils';
 import { AuthService } from '../auth/auth.service';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
-import { GetBookingDto } from './dto/find-booking.dto';
+import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Injectable()
 export class OwnersService {
   constructor(
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly verificationService: VerifcationService,
-    @Inject(forwardRef(() => AuthService)) // <--- ADD THIS
+    @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
     private readonly logger: Logger,
     private readonly accountsPublisher: AccountsPublisher,
+    private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
   private get prisma() {
@@ -378,10 +374,11 @@ export class OwnersService {
 
     return results.filter((p) => p !== null);
   }
-
   async getVerificationStatus(ownerId: number) {
-    // recompute first (ensures state is correct)
-    await this.authService.recomputeVerificationLevel(ownerId, UserRole.OWNER);
+    const newLevel = await this.authService.recomputeVerificationLevel(
+      ownerId,
+      UserRole.OWNER,
+    );
 
     const owner = await this.prisma.owner.findUnique({
       where: { id: ownerId },
@@ -389,6 +386,19 @@ export class OwnersService {
 
     if (!owner) {
       throw new NotFoundException('Owner not found');
+    }
+
+    if (newLevel === 'FULLY_VERIFIED') {
+      const existingTrial = await this.prisma.subscription.findFirst({
+        where: {
+          ownerId,
+          type: 'TRIAL',
+        },
+      });
+
+      if (!existingTrial) {
+        await this.subscriptionsService.createTrial(ownerId);
+      }
     }
 
     const documents = await this.prisma.verificationDocument.findMany({
@@ -410,6 +420,62 @@ export class OwnersService {
         expiresAt: p.expiresAt,
         fileFormat: p.fileFormat,
       })),
+    };
+  }
+
+  async getCurrentSubscription(ownerId: number) {
+    const subscription = await this.prisma.subscription.findFirst({
+      where: {
+        ownerId,
+        status: 'ACTIVE',
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { startedAt: 'desc' }, // get the latest active one
+    });
+
+    if (!subscription) return null;
+
+    return {
+      id: subscription.id,
+      type: subscription.type,
+      startedAt: subscription.startedAt,
+      expiresAt: subscription.expiresAt,
+      provider: subscription.provider,
+    };
+  }
+
+  async getOwnerAccessStatus(ownerId: number) {
+    const verification = await this.authService.getVerificationStatus(
+      ownerId,
+      'OWNER',
+    );
+
+    //* automatically create trial if fully verified and no active subscription
+    let subscription = await this.getCurrentSubscription(ownerId);
+    if (verification.verificationLevel === 'FULLY_VERIFIED' && !subscription) {
+      subscription = await this.subscriptionsService.createTrial(ownerId);
+    }
+
+    return {
+      ownerId,
+      isVerified: verification.verificationLevel === 'FULLY_VERIFIED',
+      verificationLevel: verification.verificationLevel,
+      hasActiveSubscription: !!subscription,
+      subscription: subscription
+        ? {
+            id: subscription.id,
+            type: subscription.type,
+            startedAt: subscription.startedAt,
+            expiresAt: subscription.expiresAt,
+            provider: subscription.provider,
+          }
+        : null,
+      canCreateBoardingHouse:
+        verification.verificationLevel === 'FULLY_VERIFIED' && !!subscription,
+      canCreateRoom:
+        verification.verificationLevel === 'FULLY_VERIFIED' && !!subscription,
+      shouldPurchasePlan:
+        verification.verificationLevel === 'FULLY_VERIFIED' && !subscription,
     };
   }
 

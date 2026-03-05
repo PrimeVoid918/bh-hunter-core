@@ -17,7 +17,12 @@ export class MapsController {
     @Query('lng') lng: number,
     @Query('radius') radius: number,
   ) {
-    return this.mapsService.findNearby(+lat, +lng, +radius);
+    // radius in meters
+    return this.mapsService.findNearby({
+      lat: +lat,
+      lng: +lng,
+      radius: +radius,
+    });
   }
 
   // Markers inside bounding box (front-end map view)
