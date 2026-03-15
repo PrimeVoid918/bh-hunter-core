@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UserUnionService } from './userUnion.service';
@@ -15,10 +15,10 @@ import { AccountsPublisher } from '../accounts/accounts.publisher';
 @Module({
   imports: [
     ImageModule,
-    TenantsModule,
     JwtModule.registerAsync(jwtConfig),
-    AdminsModule,
-    OwnersModule,
+    forwardRef(() => TenantsModule),
+    forwardRef(() => OwnersModule),
+    forwardRef(() => AdminsModule),
   ],
   controllers: [AuthController],
   providers: [
@@ -28,6 +28,12 @@ import { AccountsPublisher } from '../accounts/accounts.publisher';
     CryptoService,
     JwtStrategy,
   ],
-  exports: [UserUnionService, CryptoService],
+  exports: [
+    UserUnionService,
+    CryptoService,
+    AccountsPublisher,
+    AuthService,
+    JwtStrategy,
+  ],
 })
 export class AuthModule {}

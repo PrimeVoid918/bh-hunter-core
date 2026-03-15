@@ -1,62 +1,39 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import { BookingsController } from './bookings.controller';
-import { UserUnionService } from '../auth/userUnion.service';
-import { ImageService } from 'src/infrastructure/image/image.service';
-import { TenantsService } from '../tenants/tenants.service';
-import { OwnersService } from '../owners/owners.service';
-import { AdminsService } from '../admins/admins.service';
-import { FileOpsUtils } from 'src/infrastructure/shared/utils/file-ops.utls';
-import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path-builder.util';
-import { VerifcationService } from 'src/domains/verifications/verification.service';
-import { Logger } from 'src/common/logger/logger.service';
-import { DocumentService } from 'src/infrastructure/document/document.service';
 import { BookingEventPublisher } from './events/bookings.publisher';
-import { PaymentsService } from '../payments/payments.service';
-import { PaymongoService } from '../payments/strategies/paymongo/paymongo.service';
-import { AuthService } from '../auth/auth.service';
-import { CryptoService } from '../auth/utilities/crypto.service';
-import { JwtService } from '@nestjs/jwt';
-import { SocketGateway } from 'src/infrastructure/sockets/sockets.gateway';
-import { NotificationGateway } from 'src/infrastructure/sockets/notification/notification.gateway';
-import { AdminsPublisher } from '../admins/events/admins.publisher';
-import { AccountsPublisher } from '../accounts/accounts.publisher';
-import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { AuthModule } from '../auth/auth.module';
+import { ImageModule } from 'src/infrastructure/image/image.module';
+import { TenantsModule } from '../tenants/tenants.module';
+import { OwnersModule } from '../owners/owners.module';
+import { AdminsModule } from '../admins/admins.module';
+import { VerificationModule } from '../verifications/verification.module';
+import { PaymentsModule } from '../payments/payments.module';
+import { DocumentModule } from 'src/infrastructure/document/document.module';
+import { SocketModule } from 'src/infrastructure/sockets/sockets.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { AccountsModule } from '../accounts/accounts.module';
+import { SharedModule } from 'src/infrastructure/shared/shared.module';
 
 @Module({
-  imports: [],
-  controllers: [BookingsController],
-  providers: [
-    BookingEventPublisher,
-    BookingsService,
-    UserUnionService,
-    ImageService,
-    TenantsService,
-    OwnersService,
-    AdminsService,
-    FileOpsUtils,
-    MediaPathBuilderUtil,
-    VerifcationService,
-    Logger,
-    PaymentsService,
-    {
-      provide: 'PAYMENT_PROVIDER',
-      useClass: PaymongoService,
-    },
-    {
-      provide: 'BASE_DIR',
-      useValue: 'media', // or your base directory path
-    },
-    DocumentService,
-    AuthService,
-    CryptoService,
-    JwtService,
-    SocketGateway,
-    NotificationGateway,
-    AdminsPublisher,
-    AccountsPublisher,
-    SubscriptionsService,
+  imports: [
+    forwardRef(() => SubscriptionsModule),
+    AuthModule,
+    ImageModule,
+    TenantsModule,
+    OwnersModule,
+    AdminsModule,
+    VerificationModule,
+    PaymentsModule,
+    DocumentModule,
+    SocketModule,
+    NotificationsModule,
+    AccountsModule,
+    SharedModule,
   ],
-  exports: ['PAYMENT_PROVIDER'],
+  controllers: [BookingsController],
+  providers: [BookingEventPublisher, BookingsService],
+  exports: [BookingsService, BookingEventPublisher],
 })
 export class BookingsModule {}

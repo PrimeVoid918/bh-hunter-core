@@ -20,35 +20,37 @@ import { CryptoService } from 'src/domains/auth/utilities/crypto.service';
 import { AdminsPublisher } from 'src/domains/admins/events/admins.publisher';
 import { AccountsPublisher } from 'src/domains/accounts/accounts.publisher';
 import { SubscriptionsService } from 'src/domains/subscriptions/subscriptions.service';
+import { AccountsModule } from 'src/domains/accounts/accounts.module';
+import { AuthModule } from 'src/domains/auth/auth.module';
+import { TenantsModule } from 'src/domains/tenants/tenants.module';
+import { OwnersModule } from 'src/domains/owners/owners.module';
+import { AdminsModule } from 'src/domains/admins/admins.module';
+import { ImageModule } from '../image/image.module';
+import { VerificationModule } from 'src/domains/verifications/verification.module';
+import { DocumentModule } from '../document/document.module';
+import { SubscriptionsModule } from 'src/domains/subscriptions/subscriptions.module';
 
 @Global()
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [
+    JwtModule.register({}),
+    AccountsModule,
+    AuthModule,
+    TenantsModule,
+    OwnersModule,
+    AdminsModule,
+    ImageModule,
+    VerificationModule,
+    DocumentModule,
+    AdminsModule,
+    SubscriptionsModule,
+  ],
   providers: [
-    AccountsPublisher,
     GameGateway,
-    UserUnionService,
-    TenantsService,
-    AdminsService,
-    OwnersService,
-    ImageService,
-    VerifcationService,
-    Logger,
-    FileOpsUtils,
-    MediaPathBuilderUtil,
-    DocumentService,
     RpsService,
     SocketGateway,
-    AuthService,
-    CryptoService,
-    AdminsPublisher,
-    SubscriptionsService,
-    {
-      provide: 'BASE_DIR',
-      useValue: 'media',
-    },
     { provide: APP_GUARD, useClass: WsAuthGuard },
   ],
-  exports: [GameGateway],
+  exports: [GameGateway, RpsService, SocketGateway],
 })
 export class SocketModule {}

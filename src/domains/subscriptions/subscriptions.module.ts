@@ -1,20 +1,12 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionsController } from './subscriptions.controller';
-import { PaymentsService } from '../payments/payments.service';
-import { PaymongoService } from '../payments/strategies/paymongo/paymongo.service';
-import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
+import { PaymentsModule } from '../payments/payments.module';
 
 @Module({
+  imports: [forwardRef(() => PaymentsModule)],
   controllers: [SubscriptionsController],
-  providers: [
-    SubscriptionsService,
-    PaymentsService,
-    BookingEventPublisher,
-    {
-      provide: 'PAYMENT_PROVIDER',
-      useClass: PaymongoService,
-    },
-  ],
+  providers: [SubscriptionsService],
+  exports: [SubscriptionsService],
 })
 export class SubscriptionsModule {}

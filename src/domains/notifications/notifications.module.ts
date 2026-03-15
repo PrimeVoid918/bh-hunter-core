@@ -1,61 +1,53 @@
 import { Module } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
 import { BookingListener } from './listeners/bookings.listener';
-import { NotificationEmitter } from 'src/infrastructure/sockets/notification/notificatoin-emiiter.service';
-import { SocketGateway } from 'src/infrastructure/sockets/sockets.gateway';
-import { NotificationGateway } from 'src/infrastructure/sockets/notification/notification.gateway';
-import { JwtService } from '@nestjs/jwt';
-import { UserUnionService } from '../auth/userUnion.service';
-import { AdminsService } from '../admins/admins.service';
-import { OwnersService } from '../owners/owners.service';
-import { TenantsService } from '../tenants/tenants.service';
-import { VerifcationService } from 'src/domains/verifications/verification.service';
-import { AuthService } from '../auth/auth.service';
-import { Logger } from 'src/common/logger/logger.service';
-import { ImageService } from 'src/infrastructure/image/image.service';
-import { DocumentService } from 'src/infrastructure/document/document.service';
-import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path-builder.util';
-import { FileOpsUtils } from 'src/infrastructure/shared/utils/file-ops.utls';
-import { CryptoService } from '../auth/utilities/crypto.service';
 import { NotificationsController } from './notifications.controller';
-import { AdminsPublisher } from '../admins/events/admins.publisher';
 import { VerificationListener } from './listeners/verification.listener';
-import { AccountsPublisher } from '../accounts/accounts.publisher';
 import { AccountsListener } from './listeners/accounts.listener';
-import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { SocketModule } from 'src/infrastructure/sockets/sockets.module';
+import { AdminsModule } from '../admins/admins.module';
+import { TenantsModule } from '../tenants/tenants.module';
+import { OwnersModule } from '../owners/owners.module';
+import { VerificationModule } from '../verifications/verification.module';
+import { AuthModule } from '../auth/auth.module';
+import { AccountsModule } from '../accounts/accounts.module';
+import { ImageModule } from 'src/infrastructure/image/image.module';
+import { DocumentModule } from 'src/infrastructure/document/document.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { SharedModule } from 'src/infrastructure/shared/shared.module';
+import { NotificationEmitter } from '../../infrastructure/sockets/notification/notificatoin-emiiter.service';
+import { NotificationGateway } from 'src/infrastructure/sockets/notification/notification.gateway';
 
 @Module({
-  imports: [],
+  imports: [
+    SocketModule,
+    AdminsModule,
+    TenantsModule,
+    OwnersModule,
+    VerificationModule,
+    AuthModule,
+    AccountsModule,
+    ImageModule,
+    DocumentModule,
+    SubscriptionsModule,
+    SharedModule,
+  ],
   controllers: [NotificationsController],
   providers: [
-    AccountsPublisher,
     AccountsListener,
     VerificationListener,
     NotificationsService,
-    NotificationEmitter,
     BookingListener,
-    SocketGateway,
+    NotificationEmitter,
     NotificationGateway,
-    JwtService,
-    UserUnionService,
-    AdminsService,
-    OwnersService,
-    TenantsService,
-    VerifcationService,
-    AuthService,
-    Logger,
-    ImageService,
-    DocumentService,
-    MediaPathBuilderUtil,
-    FileOpsUtils,
-    CryptoService,
-    AdminsPublisher,
-    SubscriptionsService,
-    {
-      provide: 'BASE_DIR',
-      useValue: 'media',
-    },
   ],
-  exports: [NotificationsService, NotificationEmitter],
+  exports: [
+    AccountsListener,
+    VerificationListener,
+    NotificationsService,
+    BookingListener,
+    NotificationEmitter,
+    NotificationGateway,
+  ],
 })
 export class NotificationsModule {}

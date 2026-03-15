@@ -7,5 +7,6 @@ import { ImageModule } from 'src/infrastructure/image/image.module';
   imports: [ImageModule],
   controllers: [RoomsController],
   providers: [RoomsService],
+  exports: [RoomsService],
 })
 export class RoomsModule {}

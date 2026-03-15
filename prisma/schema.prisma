@@ -41,6 +41,7 @@ enum BookingStatus {
   REJECTED_BOOKING //🔴
   COMPLETED_BOOKING //🟢
   PAYMENT_FAILED
+  REFUNDED_PAYMENT
 }
 
 enum BookingType {
@@ -410,8 +411,9 @@ model Subscription {
 
   status SubscriptionStatus @default(INACTIVE)
 
-  startedAt DateTime
-  expiresAt DateTime
+  startedAt   DateTime
+  expiresAt   DateTime
+  cancelledAt DateTime?
 
   metadata Json?
 

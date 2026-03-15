@@ -7,11 +7,13 @@ import {
 } from '@prisma/client';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { SUBSCRIPTION_PLANS } from './subscription-plans.config';
+import { PaymentsService } from '../payments/payments.service';
 
 @Injectable()
 export class SubscriptionsService {
   constructor(
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   private get prisma() {
@@ -125,6 +127,83 @@ export class SubscriptionsService {
         expiresAt,
         provider: PaymentProvider.PAYMONGO,
         providerReferenceId,
+      },
+    });
+  }
+
+  async cancelSubscription(ownerId: number) {
+    const now = new Date();
+
+    const subscription = await this.prisma.subscription.findFirst({
+      where: {
+        ownerId,
+        status: SubscriptionStatus.ACTIVE,
+      },
+      include: {
+        payments: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!subscription) {
+      throw new BadRequestException('No active subscription found');
+    }
+
+    // Trial subscriptions cannot be refunded
+    if (subscription.type === SubscriptionType.TRIAL) {
+      return this.prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: SubscriptionStatus.CANCELLED,
+        },
+      });
+    }
+
+    const payment = subscription.payments.find((p) => p.status === 'PAID');
+
+    if (!payment) {
+      throw new BadRequestException('No valid payment found for subscription');
+    }
+
+    const startedAt = subscription.startedAt;
+    const expiresAt = subscription.expiresAt;
+
+    const daysUsed =
+      (now.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (daysUsed > 15) {
+      // Refund window expired
+      return this.prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: SubscriptionStatus.CANCELLED,
+        },
+      });
+    }
+
+    // Calculate prorated refund
+    const totalDays =
+      (expiresAt.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24);
+
+    const remainingDays = totalDays - daysUsed;
+
+    const refundPercentage = remainingDays / totalDays;
+
+    const refundAmount = payment.amount.mul(refundPercentage);
+
+    await this.paymentsService.refundPayment(
+      payment.id,
+      refundAmount,
+      'Owner cancelled subscription within refund window',
+    );
+
+    return this.prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: SubscriptionStatus.CANCELLED,
+        metadata: {
+          refundPercentage,
+        },
       },
     });
   }

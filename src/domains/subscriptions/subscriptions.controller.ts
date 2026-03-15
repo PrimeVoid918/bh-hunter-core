@@ -56,6 +56,11 @@ export class SubscriptionsController {
     return this.subscriptionsService.createTrial(body.ownerId);
   }
 
+  @Post('cancel/:ownerId')
+  cancel(@Param('ownerId') ownerId: string) {
+    return this.subscriptionsService.cancelSubscription(+ownerId);
+  }
+
   // 🔹 Activate PAID subscription (temporary endpoint before webhook)
   // @Post('activate')
   // activatePaid(

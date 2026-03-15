@@ -11,6 +11,7 @@ import {
   MediaType,
   ResourceType as PrismaResourceType,
   Prisma,
+  PaymentStatus,
 } from '@prisma/client';
 
 import {
@@ -26,13 +27,14 @@ import { ResourceType } from 'src/infrastructure/file-upload/types/resources-typ
 import { UserUnionService } from '../auth/userUnion.service';
 import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class BookingsService {
   constructor(
     @Inject('IDatabaseService') private readonly database: IDatabaseService,
     private readonly userUnionService: UserUnionService,
-    private readonly paymentService: PaymentsService,
+    private readonly paymentsService: PaymentsService,
     private readonly imageService: ImageService,
     private readonly bookingEventPublisher: BookingEventPublisher,
   ) {}
@@ -399,7 +401,7 @@ export class BookingsService {
 
     let payment: { paymentId: number; clientSecret: string } | null = null;
     try {
-      payment = await this.paymentService.createBookingPayment({
+      payment = await this.paymentsService.createBookingPayment({
         bookingId: bookId,
         tenantId: booking.tenantId,
         amount: new Prisma.Decimal(booking.room.price),
@@ -486,24 +488,20 @@ export class BookingsService {
       throw new NotFoundException('Booking not found');
     }
 
-    // Ensure the user has authority to cancel
     const { userId, role } = payload;
 
-    // If tenant cancels their own booking
     if (role === 'TENANT' && booking.tenantId !== userId) {
       throw new ForbiddenException(
         'You are not authorized to cancel this booking',
       );
     }
 
-    // If owner cancels a tenant’s booking (e.g., due to policy, expired payment, etc.)
     if (role === 'OWNER' && booking.room.boardingHouse.ownerId !== userId) {
       throw new ForbiddenException(
         'You are not authorized to cancel this booking',
       );
     }
 
-    // Perform the cancellation logic
     const updated = await this.prisma.booking.update({
       where: { id: bookId },
       data: {
@@ -514,6 +512,37 @@ export class BookingsService {
         updatedAt: new Date(),
       },
     });
+
+    /**
+     * Only check refunds if booking was completed
+     */
+
+    if (booking.status !== BookingStatus.COMPLETED_BOOKING) {
+      return updated;
+    }
+
+    /**
+     * REFUND LOGIC
+     */
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { bookingId: bookId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (payment && payment.status === PaymentStatus.PAID) {
+      const percentage = this.calculateRefundPercentage(payment.createdAt);
+
+      if (percentage > 0) {
+        const refundAmount = payment.amount.mul(percentage);
+
+        await this.paymentsService.refundPayment(
+          payment.id,
+          refundAmount,
+          payload.reason ?? 'Booking cancelled within refund window',
+        );
+      }
+    }
 
     this.bookingEventPublisher.cancelled({
       bookingId: bookId,
@@ -586,6 +615,50 @@ export class BookingsService {
     }
 
     return booking; // ✅ return it so the caller can use the data directly
+  }
+
+  async cancelExpiredBookings() {
+    const expiredBookings = await this.prisma.booking.findMany({
+      where: {
+        status: BookingStatus.AWAITING_PAYMENT,
+        createdAt: {
+          lt: new Date(Date.now() - 24 * 60 * 60 * 1000), // 24 hours
+        },
+        isDeleted: false,
+      },
+    });
+
+    for (const booking of expiredBookings) {
+      await this.cancelBooking(booking.id, {
+        userId: booking.tenantId,
+        role: 'TENANT',
+        reason:
+          'Booking automatically cancelled due to unpaid reservation (24h timeout)',
+      });
+    }
+
+    return expiredBookings.length;
+  }
+
+  private calculateRefundPercentage(paymentCreatedAt: Date): number {
+    const now = new Date();
+
+    const hoursPassed =
+      (now.getTime() - paymentCreatedAt.getTime()) / (1000 * 60 * 60);
+
+    if (hoursPassed <= 24) {
+      return 1; // 100%
+    }
+
+    if (hoursPassed <= 48) {
+      return 0.75; // 75%
+    }
+
+    if (hoursPassed <= 72) {
+      return 0.5; // 50%
+    }
+
+    return 0; // no refund
   }
 }
 // PENDING_REQUEST

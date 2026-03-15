@@ -1,5 +1,6 @@
 // src/modules/payments/strategies/paymongo/paymongo.interface.ts
 import { Payment, PaymentStatus } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export interface PaymentIntentResult {
   id: string; // provider's payment intent ID
@@ -21,10 +22,15 @@ export interface PaymentProviderAdapter {
   /**
    * Refund a payment
    * @param payment - Prisma Payment model
+   * @param refundAmount - Prisma Payment model
    * @param reason - optional refund reason
    * @returns provider-specific refund response
    */
-  refundPayment(payment: Payment, reason?: string): Promise<any>;
+  refundPayment(
+    payment: Payment,
+    refundAmount: Decimal,
+    reason?: string,
+  ): Promise<any>;
 
   retrievePaymentIntent(intentId: string): Promise<any>;
 

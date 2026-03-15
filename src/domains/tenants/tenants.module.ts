@@ -3,42 +3,31 @@ import { TenantsService } from './tenants.service';
 import { TenantsController } from './tenants.controller';
 import { ImageModule } from 'src/infrastructure/image/image.module';
 import { VerificationModule } from '../verifications/verification.module';
-import { VerifcationService } from '../verifications/verification.service';
-import { DocumentService } from 'src/infrastructure/document/document.service';
-import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path-builder.util';
-import { FileOpsUtils } from 'src/infrastructure/shared/utils/file-ops.utls';
+import { SharedModule } from 'src/infrastructure/shared/shared.module';
+import { AccountsModule } from '../accounts/accounts.module';
+import { AdminsModule } from '../admins/admins.module';
+import { DocumentModule } from 'src/infrastructure/document/document.module';
+import { AuthModule } from '../auth/auth.module';
+import { OwnersModule } from '../owners/owners.module';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { Logger } from 'src/common/logger/logger.service';
-import { AuthService } from '../auth/auth.service';
-import { UserUnionService } from '../auth/userUnion.service';
-import { CryptoService } from '../auth/utilities/crypto.service';
-import { JwtService } from '@nestjs/jwt';
-import { AdminsService } from '../admins/admins.service';
-import { OwnersService } from '../owners/owners.service';
-import { AdminsPublisher } from '../admins/events/admins.publisher';
-import { AccountsPublisher } from '../accounts/accounts.publisher';
-import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 @Module({
-  imports: [VerificationModule, ImageModule],
-  controllers: [TenantsController],
-  providers: [
-    AccountsPublisher,
-    AdminsPublisher,
-    TenantsService,
-    VerifcationService,
-    DocumentService,
-    MediaPathBuilderUtil,
-    FileOpsUtils,
-    { provide: 'BASE_DIR', useValue: 'media' },
-    Logger,
-    AuthService,
-    UserUnionService,
-    CryptoService,
-    JwtService,
-    AdminsService,
-    OwnersService,
-    SubscriptionsService,
+  imports: [
+    VerificationModule,
+    ImageModule,
+    SharedModule,
+    AccountsModule,
+    AdminsModule,
+    TenantsModule,
+    VerificationModule,
+    DocumentModule,
+    AuthModule,
+    OwnersModule,
+    SubscriptionsModule,
   ],
+  controllers: [TenantsController],
+  providers: [TenantsService, Logger],
   exports: [TenantsService],
 })
 export class TenantsModule {}

@@ -14,5 +14,6 @@ import { MediaPathBuilderUtil } from '../shared/utils/media-path-builder.util';
       useValue: 'media', // or your base directory path
     },
   ],
+  exports: ['BASE_DIR', DocumentService, FileOpsUtils, MediaPathBuilderUtil],
 })
 export class DocumentModule {}

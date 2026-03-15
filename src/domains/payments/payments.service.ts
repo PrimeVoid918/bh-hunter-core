@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
+  forwardRef,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -45,6 +46,8 @@ export class PaymentsService {
     @Inject('PAYMENT_PROVIDER')
     private readonly provider: PaymentProviderAdapter,
     private readonly bookingEventPublisher: BookingEventPublisher,
+
+    @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptionsService: SubscriptionsService,
   ) {}
 
@@ -298,19 +301,23 @@ export class PaymentsService {
     return payout;
   }
 
-  /** Refund a payment (only via PayMongo) */
-  async refundPayment(paymentId: number, reason?: string) {
+  /** Refund a payment (only via PayMpongo) */
+  async refundPayment(paymentId: number, amount?: Decimal, reason?: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
     });
+
     if (!payment) throw new NotFoundException('Payment not found');
 
-    // call provider refund
-    await this.provider.refundPayment(payment, reason);
+    const refundAmount = amount ?? payment.amount;
+
+    await this.provider.refundPayment(payment, refundAmount, reason);
 
     return await this.prisma.payment.update({
       where: { id: paymentId },
-      data: { status: PaymentStatus.REFUNDED },
+      data: {
+        status: PaymentStatus.REFUNDED,
+      },
     });
   }
 

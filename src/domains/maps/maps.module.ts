@@ -1,21 +1,13 @@
 import { Module } from '@nestjs/common';
 import { MapsService } from './maps.service';
 import { MapsController } from './maps.controller';
-import { ImageService } from 'src/infrastructure/image/image.service';
-import { FileOpsUtils } from 'src/infrastructure/shared/utils/file-ops.utls';
-import { MediaPathBuilderUtil } from 'src/infrastructure/shared/utils/media-path-builder.util';
+import { ImageModule } from 'src/infrastructure/image/image.module';
+import { SharedModule } from 'src/infrastructure/shared/shared.module';
 
 @Module({
+  imports: [ImageModule, SharedModule],
   controllers: [MapsController],
-  providers: [
-    MapsService,
-    ImageService,
-    FileOpsUtils,
-    MediaPathBuilderUtil,
-    {
-      provide: 'BASE_DIR',
-      useValue: 'media', // or your base directory path
-    },
-  ],
+  providers: [MapsService],
+  exports: [MapsService],
 })
 export class MapsModule {}
