@@ -24,3 +24,22 @@ export const formatVerificationLevel = (level?: string): string => {
   };
   return levels[level || ''] || 'Pending Verification';
 };
+
+// Add this to @/infrastructure/utils/enum-formatter.util
+export const formatEnum = (value?: string): string => {
+  if (!value) return 'Unknown';
+  return value
+    .split('_')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+// You might also want a status formatter for APPROVED/PENDING
+export const formatStatus = (status?: string): string => {
+  const statuses: Record<string, string> = {
+    APPROVED: 'Approved',
+    PENDING: 'Under Review',
+    REJECTED: 'Needs Re-upload',
+  };
+  return statuses[status || ''] || status || 'Pending';
+};

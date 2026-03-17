@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import {
+  RegistrationStatusSchema,
+  VerificationLevelSchema,
+} from '../user/user.types';
 
 /** Reusable ISO-8601 date-time string (with timezone offset) */
 export const ISODateString = z.string().datetime({ offset: true });
@@ -127,16 +131,20 @@ export const UpdateVerificationDocumentSchema = z
 
 export const VerificationDocumentStatusSchema = z.object({
   verified: z.boolean(),
+  registrationStatus: RegistrationStatusSchema.optional(),
+  verificationLevel: VerificationLevelSchema.optional(),
   missingVerificationDocuments: z.array(VerificationTypeSchema),
-  verificationDocuments: z.array(
-    z.object({
-      id: 4,
-      verificationType: 'BIR',
-      verificationStatus: 'APPROVED',
-      expiresAt: '2025-08-15T01:34:00.000Z',
-      fileFormat: 'PDF',
-    }),
-  ),
+  verificationDocuments: z
+    .array(
+      z.object({
+        id: z.number().int().positive(),
+        verificationType: VerificationTypeSchema,
+        verificationStatus: VerificationStatusSchema,
+        expiresAt: ISODateString,
+        fileFormat: FileFormatSchema,
+      }),
+    )
+    .default([]), // default to empty if backend returns nothing
 });
 
 /** TS types */

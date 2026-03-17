@@ -7,10 +7,18 @@ import {
   Stack,
   Button,
   Chip,
+  Alert,
+  AlertTitle,
 } from '@mui/material';
 import CheckIcon from '@mui/icons-material/Check';
-import { subscriptionPlans, sharedFeatures } from './pricing.types';
-import { useGetPlansQuery } from '@/infrastructure/subscriptions/subscriptions.redux.api';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import InfoIcon from '@mui/icons-material/Info';
+import { sharedFeatures } from './pricing.types';
+import {
+  useGetPlansQuery,
+  useGetActiveQuery,
+} from '@/infrastructure/subscriptions/subscriptions.redux.api';
 import AsyncState from '@/pages/shared/components/async-state/AsyncState';
 import { Link } from 'react-router-dom';
 
@@ -23,9 +31,84 @@ export default function PricingPage() {
     refetch,
   } = useGetPlansQuery();
 
+  // 1. Session & Identity
+  const user = JSON.parse(localStorage.getItem('owner_user') || 'null');
+  const isLoggedIn = !!user;
+
+  // 2. Subscription Status
+  const { data: activeSub } = useGetActiveQuery(user?.id, {
+    skip: !isLoggedIn,
+  });
+
+  const isTrial = activeSub?.type === 'TRIAL';
+  const hasActivePaidSub = activeSub && activeSub.type !== 'TRIAL';
+
   return (
-    <Box sx={{ bgcolor: 'background.default', py: 10 }}>
+    <Box sx={{ bgcolor: 'background.default', py: 6, minHeight: '100vh' }}>
       <Container maxWidth="lg">
+        {/* --- TOP NAVIGATION BAR --- */}
+        <Stack direction="row" justifyContent="flex-end" sx={{ mb: 2 }}>
+          {isLoggedIn ? (
+            <Button
+              component={Link}
+              to="/accounts"
+              variant="outlined"
+              startIcon={<DashboardIcon />}
+              sx={{
+                borderRadius: 100,
+                px: 3,
+                borderColor: 'outlineVariant',
+                color: 'text.primary',
+                '&:hover': {
+                  bgcolor: 'primary.light',
+                  borderColor: 'primary.main',
+                },
+              }}
+            >
+              Manage Subscription
+            </Button>
+          ) : (
+            <Button
+              component={Link}
+              to="/pricing/checkout"
+              variant="text"
+              startIcon={<AccountCircleIcon />}
+              sx={{ borderRadius: 100, fontWeight: 700 }}
+            >
+              Owner Sign In
+            </Button>
+          )}
+        </Stack>
+
+        {/* --- DYNAMIC STATUS BANNER --- */}
+        {isLoggedIn && activeSub && (
+          <Alert
+            severity={isTrial ? 'info' : 'success'}
+            icon={isTrial ? <InfoIcon /> : <CheckIcon />}
+            sx={{
+              mb: 6,
+              borderRadius: 4,
+              border: '1px solid',
+              borderColor: isTrial ? 'info.light' : 'success.light',
+            }}
+          >
+            <AlertTitle sx={{ fontWeight: 800 }}>
+              {isTrial
+                ? 'You are currently on a Free Trial'
+                : `Active Plan: ${activeSub.type}`}
+            </AlertTitle>
+            Your current access expires on{' '}
+            <strong>
+              {new Date(activeSub.expiresAt).toLocaleDateString()}
+            </strong>
+            .
+            {isTrial
+              ? ' Subscribe below to keep your properties boosted after the trial ends.'
+              : ' You can extend your visibility by choosing a plan below.'}
+          </Alert>
+        )}
+
+        {/* --- HEADER --- */}
         <Stack spacing={2} textAlign="center" sx={{ mb: 8 }}>
           <Typography
             variant="h3"
@@ -39,11 +122,12 @@ export default function PricingPage() {
           </Typography>
         </Stack>
 
+        {/* --- PLANS GRID --- */}
         <AsyncState
           isLoading={isLoading}
           isError={isError}
           error={error}
-          onRetry={refetch} // RTK Query gives you this for free
+          onRetry={refetch}
         >
           <Grid container spacing={3} justifyContent="center">
             {plans?.map((plan) => (
@@ -55,12 +139,34 @@ export default function PricingPage() {
                     display: 'flex',
                     flexDirection: 'column',
                     border: '1px solid',
-                    borderColor: 'outlineVariant',
+                    borderColor:
+                      activeSub?.type === plan.title
+                        ? 'primary.main'
+                        : 'outlineVariant',
                     borderRadius: 4,
-                    transition: 'border-color 0.2s',
-                    '&:hover': { borderColor: 'primary.main' },
+                    position: 'relative',
+                    transition: 'all 0.2s ease-in-out',
+                    '&:hover': {
+                      borderColor: 'primary.main',
+                      transform: 'translateY(-4px)',
+                    },
                   }}
                 >
+                  {/* Current Plan Indicator */}
+                  {activeSub?.type === plan.title && (
+                    <Chip
+                      label="Your Current Plan"
+                      color="primary"
+                      size="small"
+                      sx={{
+                        position: 'absolute',
+                        top: -12,
+                        left: 24,
+                        fontWeight: 700,
+                      }}
+                    />
+                  )}
+
                   <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
                     {plan.title}
                   </Typography>
@@ -101,8 +207,13 @@ export default function PricingPage() {
                     size="large"
                     component={Link}
                     to={`/pricing/checkout?id=${plan.id}`}
+                    sx={{ mt: 'auto', borderRadius: 100, py: 1.5 }}
                   >
-                    Subscribe Now
+                    {!isLoggedIn
+                      ? 'Subscribe Now'
+                      : isTrial
+                        ? 'Activate Full Plan'
+                        : 'Extend Plan'}
                   </Button>
                 </Paper>
               </Grid>
@@ -110,6 +221,7 @@ export default function PricingPage() {
           </Grid>
         </AsyncState>
 
+        {/* --- FEATURES FOOTER --- */}
         <Paper
           sx={{
             mt: 6,

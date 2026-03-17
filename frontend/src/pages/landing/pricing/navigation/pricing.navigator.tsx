@@ -12,7 +12,7 @@ export default function PricingNavigator() {
     children: [
       { index: true, element: <PricingPage /> },
       { path: 'checkout', element: <CheckoutPage /> },
-      { path: 'sucess', element: <SuccessPage /> },
+      { path: 'success', element: <SuccessPage /> },
       { path: 'cancel', element: <CancelPage /> },
     ],
   };

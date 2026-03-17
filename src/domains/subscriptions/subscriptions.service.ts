@@ -1,5 +1,4 @@
 import { Injectable, BadRequestException, Inject } from '@nestjs/common';
-import { PrismaService } from 'src/infrastructure/database/prisma.service';
 import {
   SubscriptionStatus,
   SubscriptionType,
@@ -8,6 +7,7 @@ import {
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { SUBSCRIPTION_PLANS } from './subscription-plans.config';
 import { PaymentsService } from '../payments/payments.service';
+import { Decimal } from '@prisma/client/runtime/library';
 
 @Injectable()
 export class SubscriptionsService {
@@ -189,7 +189,7 @@ export class SubscriptionsService {
 
     const refundPercentage = remainingDays / totalDays;
 
-    const refundAmount = payment.amount.mul(refundPercentage);
+    const refundAmount = new Decimal(payment.amount).mul(refundPercentage);
 
     await this.paymentsService.refundPayment(
       payment.id,

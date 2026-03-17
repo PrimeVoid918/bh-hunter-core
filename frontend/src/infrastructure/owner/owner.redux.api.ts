@@ -2,6 +2,7 @@ import { BACKEND_API } from '@/app/config/api';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { ApiResponseType } from '../common/types/backend-reponse.type';
 import { Owner } from './owner.types';
+import { VerificationDocumentStatus } from '../documents/documents.type';
 
 //* -- RTK ---
 const ownerApiRoute = `/owners`;
@@ -47,6 +48,20 @@ export const ownerApi = createApi({
       //* Optional: invalidates cache for `Owner`
       invalidatesTags: ['Owner'],
     }),
+    getVerificationStatus: builder.query<
+      VerificationDocumentStatus,
+      { id: number }
+    >({
+      query: ({ id }) => {
+        return `/api/owners/${id}/permits-verification-status`;
+      },
+      transformResponse: (
+        response: ApiResponseType<VerificationDocumentStatus>,
+      ) => {
+        console.log('getVerificationStatus transformResponse:', response);
+        return response.results!;
+      },
+    }),
     patch: builder.mutation<Owner, { id: number; data: Partial<Owner> }>({
       query: ({ id, data }) => ({
         url: `${ownerApiRoute}/${id}`,
@@ -72,4 +87,5 @@ export const {
   useCreateMutation,
   usePatchMutation,
   useDeleteMutation,
+  useGetVerificationStatusQuery,
 } = ownerApi;

@@ -52,36 +52,39 @@ export default defineConfig({
       process.env.VITE_CESIUM_API_KEY,
     ),
   },
-  // server: {
-  //   host: true,
-  //   port: 5173,
-  //   proxy: {
-  //     '/api': {
-  //       target: `http://${LOCAL_IP}:3000`,
-  //       changeOrigin: true,
-  //     },
-  //     '/media': {
-  //       target: `http://${LOCAL_IP}:3000`,
-  //       changeOrigin: true,
-  //     },
-  //   },
-  // },
   server: {
     host: true,
     port: 5173,
     proxy: {
       '/api': {
-        // Use localhost or 127.0.0.1 for internal proxying
-        target: 'http://127.0.0.1:3000',
+        target: 'https:bhhph.online', // 👈 your VPS backend
         changeOrigin: true,
         secure: false,
-        // This ensures /api/user stays /api/user when it hits NestJS
-        rewrite: (path) => path,
       },
       '/media': {
-        target: 'http://127.0.0.1:3000',
+        target: 'https:bhhph.online',
         changeOrigin: true,
+        secure: false,
       },
     },
   },
+
+  // server: {
+  //   host: true,
+  //   port: 5173,
+  //   proxy: {
+  //     '/api': {
+  //       // Use localhost or 127.0.0.1 for internal proxying
+  //       target: 'http://127.0.0.1:3000',
+  //       changeOrigin: true,
+  //       secure: false,
+  //       // This ensures /api/user stays /api/user when it hits NestJS
+  //       rewrite: (path) => path,
+  //     },
+  //     '/media': {
+  //       target: 'http://127.0.0.1:3000',
+  //       changeOrigin: true,
+  //     },
+  //   },
+  // },
 });
