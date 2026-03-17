@@ -148,9 +148,9 @@ export class PaymongoService implements PaymentProviderAdapter {
     refundAmount: Decimal,
     reason?: string,
   ): Promise<any> {
-    if (!payment.providerPaymentIntentId) {
+    if (!payment.providerPaymentId) {
       throw new InternalServerErrorException(
-        'Payment has no provider payment intent ID',
+        'Payment has no provider payment ID',
       );
     }
 
@@ -160,14 +160,17 @@ export class PaymongoService implements PaymentProviderAdapter {
         {
           data: {
             attributes: {
-              payment_intent: payment.providerPaymentIntentId,
-              amount: Number(refundAmount) * 100, // use the provided refundAmount
-              reason: reason ?? 'Customer request',
+              payment_id: payment.providerPaymentId, // required
+              amount: Math.round(Number(refundAmount) * 100), // integer in cents
+              reason: reason, // valid reason
             },
           },
         },
-        { headers: this.authHeader },
+        { headers: this.authHeader }, // 🔑 include auth header
       );
+
+      console.log('refund data of payment: ', payment);
+
       return res.data;
     } catch (err: any) {
       this.handleAxiosError(err, 'refundPayment');

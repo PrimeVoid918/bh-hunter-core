@@ -53,7 +53,7 @@ export const ownerApi = createApi({
       { id: number }
     >({
       query: ({ id }) => {
-        return `/api/owners/${id}/permits-verification-status`;
+        return `/owners/${id}/permits-verification-status`;
       },
       transformResponse: (
         response: ApiResponseType<VerificationDocumentStatus>,

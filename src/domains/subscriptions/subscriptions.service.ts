@@ -162,7 +162,7 @@ export class SubscriptionsService {
     if (subscription.type === SubscriptionType.TRIAL) {
       return this.prisma.subscription.update({
         where: { id: subscription.id },
-        data: { status: SubscriptionStatus.CANCELLED },
+        data: { status: SubscriptionStatus.CANCELLED, cancelledAt: new Date() },
       });
     }
 
@@ -232,13 +232,14 @@ export class SubscriptionsService {
     await this.paymentsService.refundPayment(
       payment.id,
       refundAmount,
-      'Owner cancelled subscription within refund window',
+      'requested_by_customer',
     );
 
     return this.prisma.subscription.update({
       where: { id: subscription.id },
       data: {
         status: SubscriptionStatus.CANCELLED,
+        cancelledAt: new Date(),
         metadata: { refundPercentage },
       },
     });

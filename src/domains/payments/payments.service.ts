@@ -22,9 +22,7 @@ import {
   SubscriptionStatus,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
-import { PaymongoWebhookPayload } from './dto/types';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
-import axios, { AxiosError, AxiosResponse } from 'axios';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 
 interface CreateBookingPaymentInput {
@@ -487,11 +485,24 @@ export class PaymentsService {
   }
 
   private async markPaymentPaid(payment: Payment) {
-    if (
-      payment.status !== PaymentStatus.PENDING &&
-      payment.status !== PaymentStatus.REQUIRES_ACTION
-    ) {
-      return { ignored: true };
+    if (payment.status === PaymentStatus.PAID) return { ignored: true };
+
+    // fetch PayMongo payment ID if missing
+    if (!payment.providerPaymentId) {
+      const paymentIntent = await this.provider.retrievePaymentIntent(
+        payment.providerPaymentIntentId!,
+      );
+      const providerPaymentId = paymentIntent.attributes.payments?.[0]?.id;
+      if (!providerPaymentId) {
+        throw new InternalServerErrorException(
+          'PayMongo payment object missing',
+        );
+      }
+      await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: { providerPaymentId },
+      });
+      payment.providerPaymentId = providerPaymentId;
     }
 
     await this.prisma.$transaction(async (tx) => {
@@ -530,17 +541,31 @@ export class PaymentsService {
           data: { status: 'EXPIRED' },
         });
 
-        await tx.subscription.create({
-          data: {
-            ownerId: payment.ownerId,
-            type: 'PAID',
-            status: 'ACTIVE',
-            startedAt: now,
-            expiresAt,
-            provider: payment.provider,
-            providerReferenceId: payment.providerPaymentIntentId,
-          },
-        });
+        if (payment.subscriptionId) {
+          await tx.subscription.update({
+            where: { id: payment.subscriptionId },
+            data: {
+              status: SubscriptionStatus.ACTIVE,
+              startedAt: now,
+              expiresAt,
+              provider: payment.provider,
+              providerReferenceId: payment.providerPaymentIntentId,
+            },
+          });
+        } else {
+          // fallback safety
+          await tx.subscription.create({
+            data: {
+              ownerId: payment.ownerId,
+              type: 'PAID',
+              status: 'ACTIVE',
+              startedAt: now,
+              expiresAt,
+              provider: payment.provider,
+              providerReferenceId: payment.providerPaymentIntentId,
+            },
+          });
+        }
 
         return;
       }
