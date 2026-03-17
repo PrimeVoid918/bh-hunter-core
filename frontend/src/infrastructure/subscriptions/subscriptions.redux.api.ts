@@ -49,8 +49,9 @@ export const subscriptionsApi = createApi({
     }),
     refundSubscription: builder.mutation<Subscription, number>({
       query: (ownerId) => ({
-        url: `${subscriptionApiRoute}/cancel/${ownerId}`,
+        url: `${subscriptionApiRoute}/cancel`,
         method: 'POST',
+        body: { ownerId }, // send ownerId in the request body
       }),
       transformResponse: (response: ApiResponseType<Subscription>) =>
         response.results ?? null,

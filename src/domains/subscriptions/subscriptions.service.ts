@@ -3,6 +3,7 @@ import {
   SubscriptionStatus,
   SubscriptionType,
   PaymentProvider,
+  PaymentStatus,
 } from '@prisma/client';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { SUBSCRIPTION_PLANS } from './subscription-plans.config';
@@ -134,13 +135,11 @@ export class SubscriptionsService {
   async cancelSubscription(ownerId: number) {
     const now = new Date();
 
+    // 1️⃣ Find the ACTIVE subscription for this owner
     const subscription = await this.prisma.subscription.findFirst({
       where: {
         ownerId,
         status: SubscriptionStatus.ACTIVE,
-      },
-      include: {
-        payments: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -149,21 +148,67 @@ export class SubscriptionsService {
       throw new BadRequestException('No active subscription found');
     }
 
-    // Trial subscriptions cannot be refunded
+    // 🔹 Raw SQL equivalent
+    /*
+  SELECT *
+  FROM "Subscription"
+  WHERE "ownerId" = 1
+    AND "status" = 'ACTIVE'
+  ORDER BY "createdAt" DESC
+  LIMIT 1;
+  */
+
+    // 2️⃣ Trial subscriptions cannot be refunded
     if (subscription.type === SubscriptionType.TRIAL) {
       return this.prisma.subscription.update({
         where: { id: subscription.id },
-        data: {
-          status: SubscriptionStatus.CANCELLED,
-        },
+        data: { status: SubscriptionStatus.CANCELLED },
       });
     }
 
-    const payment = subscription.payments.find((p) => p.status === 'PAID');
+    // 3️⃣ Find the payment for this subscription (or fallback to ownerId)
+    let payment = await this.prisma.payment.findFirst({
+      where: {
+        subscriptionId: subscription.id,
+        status: PaymentStatus.PAID,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // 🔹 Fallback if subscriptionId link is missing
+    if (!payment) {
+      payment = await this.prisma.payment.findFirst({
+        where: {
+          ownerId,
+          purchaseType: 'SUBSCRIPTION',
+          status: PaymentStatus.PAID,
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
 
     if (!payment) {
       throw new BadRequestException('No valid payment found for subscription');
     }
+
+    // 🔹 Raw SQL equivalent
+    /*
+  SELECT *
+  FROM "Payment"
+  WHERE "subscriptionId" = 11
+    AND "status" = 'PAID'
+  ORDER BY "createdAt" DESC
+  LIMIT 1;
+
+  -- fallback:
+  SELECT *
+  FROM "Payment"
+  WHERE "ownerId" = 1
+    AND "purchaseType" = 'SUBSCRIPTION'
+    AND "status" = 'PAID'
+  ORDER BY "createdAt" DESC
+  LIMIT 1;
+  */
 
     const startedAt = subscription.startedAt;
     const expiresAt = subscription.expiresAt;
@@ -172,23 +217,16 @@ export class SubscriptionsService {
       (now.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24);
 
     if (daysUsed > 15) {
-      // Refund window expired
       return this.prisma.subscription.update({
         where: { id: subscription.id },
-        data: {
-          status: SubscriptionStatus.CANCELLED,
-        },
+        data: { status: SubscriptionStatus.CANCELLED },
       });
     }
 
-    // Calculate prorated refund
     const totalDays =
       (expiresAt.getTime() - startedAt.getTime()) / (1000 * 60 * 60 * 24);
-
     const remainingDays = totalDays - daysUsed;
-
     const refundPercentage = remainingDays / totalDays;
-
     const refundAmount = new Decimal(payment.amount).mul(refundPercentage);
 
     await this.paymentsService.refundPayment(
@@ -201,11 +239,18 @@ export class SubscriptionsService {
       where: { id: subscription.id },
       data: {
         status: SubscriptionStatus.CANCELLED,
-        metadata: {
-          refundPercentage,
-        },
+        metadata: { refundPercentage },
       },
     });
+
+    // 🔹 Raw SQL equivalent for update:
+    /*
+  UPDATE "Subscription"
+  SET "status" = 'CANCELLED',
+      "metadata" = '{"refundPercentage": 0.75}' -- example
+  WHERE "id" = 11
+  RETURNING *;
+  */
   }
 
   // =========================

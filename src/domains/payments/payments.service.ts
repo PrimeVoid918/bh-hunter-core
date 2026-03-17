@@ -19,6 +19,7 @@ import {
   Payment,
   Prisma,
   BookingStatus,
+  SubscriptionStatus,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { PaymongoWebhookPayload } from './dto/types';
@@ -148,107 +149,105 @@ export class PaymentsService {
   async createSubscriptionPayment(input: { ownerId: number; planId: string }) {
     const { ownerId, planId } = input;
 
+    // ✅ Validate owner
     const owner = await this.prisma.owner.findUnique({
       where: { id: ownerId },
     });
-
-    if (!owner) {
-      throw new NotFoundException('Owner not found');
-    }
-
-    const plan = this.subscriptionsService.getPlanById(planId);
-
-    if (!plan) {
-      throw new BadRequestException('Invalid subscription plan');
-    }
-
+    if (!owner) throw new NotFoundException('Owner not found');
     if (owner.verificationLevel !== 'FULLY_VERIFIED') {
       throw new ForbiddenException(
         'Owner must be fully verified before subscribing.',
       );
     }
 
+    // ✅ Validate plan
+    const plan = this.subscriptionsService.getPlanById(planId);
+    if (!plan) throw new BadRequestException('Invalid subscription plan');
+
+    // ✅ Check if active subscription exists
     const existingActiveSubscription = await this.prisma.subscription.findFirst(
       {
         where: {
           ownerId,
-          status: 'ACTIVE',
+          status: SubscriptionStatus.ACTIVE,
           expiresAt: { gt: new Date() },
         },
       },
     );
-
     if (existingActiveSubscription) {
       throw new BadRequestException(
         'Owner already has an active subscription.',
       );
     }
 
-    // ✅ Transaction: expire old + create new payment
-    const payment = await this.prisma.$transaction(async (tx) => {
-      await tx.payment.updateMany({
-        where: {
-          ownerId,
-          purchaseType: PurchaseType.SUBSCRIPTION,
-          status: {
-            in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
-          },
-        },
-        data: {
-          status: PaymentStatus.EXPIRED,
-        },
-      });
-
-      const newPayment = await tx.payment.create({
-        data: {
-          userId: ownerId,
-          userType: ResourceType.OWNER,
-          ownerId,
-          amount: new Prisma.Decimal(plan.totalPrice),
-          currency: CurrencyType.PHP,
-          purchaseType: PurchaseType.SUBSCRIPTION,
-          status: PaymentStatus.PENDING,
-          provider: PaymentProvider.PAYMONGO,
-          metadata: {
-            type: 'subscription',
-            planId: plan.id,
-          },
-        },
-      });
-
-      return newPayment;
+    // ✅ Expire old pending subscription payments
+    await this.prisma.payment.updateMany({
+      where: {
+        ownerId,
+        purchaseType: PurchaseType.SUBSCRIPTION,
+        status: { in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION] },
+      },
+      data: { status: PaymentStatus.EXPIRED },
     });
 
-    // ✅ Call external provider OUTSIDE transaction
+    // ✅ Create subscription row first (inactive)
+    const subscription = await this.prisma.subscription.create({
+      data: {
+        ownerId,
+        type: 'PAID',
+        status: SubscriptionStatus.INACTIVE,
+        startedAt: new Date(),
+        expiresAt: new Date(
+          new Date().setFullYear(new Date().getFullYear() + 1),
+        ),
+      },
+    });
+
+    // ✅ Create the payment row in DB first
+    const payment = await this.prisma.payment.create({
+      data: {
+        userId: ownerId,
+        userType: ResourceType.OWNER,
+        ownerId,
+        amount: new Prisma.Decimal(plan.totalPrice),
+        currency: CurrencyType.PHP,
+        purchaseType: PurchaseType.SUBSCRIPTION,
+        provider: PaymentProvider.PAYMONGO,
+        subscriptionId: subscription.id,
+        metadata: { type: 'subscription', planId: plan.id },
+        status: PaymentStatus.PENDING,
+      },
+    });
+
+    // ✅ Call PayMongo to create payment link with the DB object
+    let link;
     try {
-      const link = await this.provider.createPaymentLink(payment);
-
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          providerPaymentLinkId: link.id,
-          providerPaymentIntentId: link.paymentIntentId,
-          status: PaymentStatus.REQUIRES_ACTION,
-        },
-      });
-
-      return {
-        paymentId: payment.id,
-        checkoutUrl: link.checkoutUrl,
-      };
-    } catch (error: any) {
-      console.error(error);
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: PaymentStatus.FAILED,
-        },
-      });
-
+      link = await this.provider.createPaymentLink(payment);
+    } catch (error) {
+      console.error('Failed to create PayMongo payment link:', error);
+      // Optional: delete subscription/payment to avoid orphan rows
+      await this.prisma.payment.delete({ where: { id: payment.id } });
+      await this.prisma.subscription.delete({ where: { id: subscription.id } });
       throw new InternalServerErrorException(
         'Failed to initialize payment session.',
       );
     }
+
+    // ✅ Update payment with provider info
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        providerPaymentLinkId: link.id,
+        providerPaymentIntentId: link.paymentIntentId,
+        status: PaymentStatus.REQUIRES_ACTION,
+      },
+    });
+
+    return {
+      subscriptionId: subscription.id,
+      paymentId: payment.id,
+      checkoutUrl: link.checkoutUrl,
+    };
   }
 
   /** Handle webhook from PayMongo to confirm payment */

@@ -56,9 +56,15 @@ export class SubscriptionsController {
     return this.subscriptionsService.createTrial(body.ownerId);
   }
 
-  @Post('cancel/:ownerId')
-  cancel(@Param('ownerId') ownerId: string) {
-    return this.subscriptionsService.cancelSubscription(+ownerId);
+  @Post('cancel')
+  async cancel(@Body('ownerId') ownerId: number) {
+    if (!ownerId || typeof ownerId !== 'number') {
+      throw new BadRequestException('Invalid or missing owner ID');
+    }
+
+    console.log(ownerId);
+
+    return this.subscriptionsService.cancelSubscription(ownerId);
   }
 
   // 🔹 Activate PAID subscription (temporary endpoint before webhook)

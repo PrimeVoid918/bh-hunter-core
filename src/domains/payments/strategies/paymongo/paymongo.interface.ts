@@ -1,30 +1,31 @@
-// src/modules/payments/strategies/paymongo/paymongo.interface.ts
-import { Payment, PaymentStatus } from '@prisma/client';
+import { Payment } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export interface PaymentIntentResult {
   id: string; // provider's payment intent ID
-  paymentIntentId: string;
-  checkoutUrl?: string; // optional, only for payment links
-  clientSecret?: string; // optional, only for payment intents
+  paymentIntentId: string; // same as above for link compatibility
+  checkoutUrl?: string; // for payment links
+  clientSecret?: string; // for in-app payment intents
 }
 
 export interface PaymentProviderAdapter {
   /**
-   * Create a payment intent for a given Payment object
+   * Create a payment link for a Payment object
    * @param payment - Prisma Payment model
-   * @returns provider-specific payment intent info
    */
   createPaymentLink(payment: Payment): Promise<PaymentIntentResult>;
 
+  /**
+   * Create a payment intent for in-app payments
+   * @param payment - Prisma Payment model
+   */
   createPaymentIntent(payment: Payment): Promise<PaymentIntentResult>;
 
   /**
    * Refund a payment
    * @param payment - Prisma Payment model
-   * @param refundAmount - Prisma Payment model
-   * @param reason - optional refund reason
-   * @returns provider-specific refund response
+   * @param refundAmount - amount to refund
+   * @param reason - optional reason
    */
   refundPayment(
     payment: Payment,
@@ -32,12 +33,14 @@ export interface PaymentProviderAdapter {
     reason?: string,
   ): Promise<any>;
 
+  /**
+   * Retrieve a payment intent by ID
+   * @param intentId
+   */
   retrievePaymentIntent(intentId: string): Promise<any>;
 
   /**
-   * Optionally handle webhook payloads from provider
-   * @param payload - raw provider webhook payload
-   * @returns normalized object with event type and payment intent ID
+   * Optional: handle provider webhook
    */
   handleWebhook?(
     payload: any,
