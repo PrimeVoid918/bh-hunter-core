@@ -1,77 +1,72 @@
 import { BACKEND_API } from '@/app/config/api';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { ApiResponseType } from '../common/types/backend-reponse.type';
-import { CreateTenant, GetTenant, Tenant } from './tenant.types';
+import { CreateTenant, FindAllTenants, FindOneTenant } from './tenant.types';
 
-//* createApi
-//* For accessing the API with built-in abstractions
-//* such as isLoading, error, and others.
 const tenantApiRoute = `/tenants`;
-export const tenantApi = createApi({
-  tagTypes: ['Tenant'],
-  reducerPath: 'tenantApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: BACKEND_API,
-    fetchFn: async (input, init) => {
-      console.log('FETCHING URL:', input);
-      console.log('FETCH INIT:', init);
-      return fetch(input, init);
-    },
-  }),
 
+export const tenantApi = createApi({
+  reducerPath: 'tenantApi',
+  baseQuery: fetchBaseQuery({ baseUrl: BACKEND_API }),
+  tagTypes: ['Tenant'],
   endpoints: (builder) => ({
-    getAll: builder.query<GetTenant[], void>({
-      // TODO: add pagination
+    // FETCH ALL TENANTS
+    getAll: builder.query<FindAllTenants, void>({
       query: () => tenantApiRoute,
-      transformResponse: (response: ApiResponseType<GetTenant[]>) => {
-        return (response.results ?? []).map((tenant) => ({
-          ...tenant,
-          fullname: `${tenant.firstname} ${tenant.lastname}`,
-        }));
-      },
+      transformResponse: (response: ApiResponseType<FindAllTenants>) =>
+        response.results ?? [],
+      providesTags: (result) =>
+        result
+          ? result.map((tenant) => ({ type: 'Tenant' as const, id: tenant.id }))
+          : [],
     }),
-    getOne: builder.query<Tenant, number>({
+
+    // FETCH ONE TENANT
+    getOne: builder.query<FindOneTenant, number>({
       query: (id) => `${tenantApiRoute}/${id}`,
-      transformResponse: (response: ApiResponseType<Tenant>) =>
+      transformResponse: (response: ApiResponseType<FindOneTenant>) =>
         response.results ?? null,
-      //* Optional: invalidates cache for "Tenant"
       providesTags: (result, error, id) => [{ type: 'Tenant', id }],
     }),
+
+    // CREATE TENANT
     create: builder.mutation<CreateTenant, Partial<CreateTenant>>({
-      query: (data) => {
-        const trans = {
+      query: (data) => ({
+        url: tenantApiRoute,
+        method: 'POST',
+        body: {
           ...data,
           age: data.age !== undefined ? Number(data.age) : undefined,
-        };
-        return {
-          url: tenantApiRoute,
-          method: 'POST',
-          body: trans,
-        };
-      },
-      //* Optional: invalidates cache for "Tenant"
+        },
+      }),
       invalidatesTags: ['Tenant'],
     }),
-    patch: builder.mutation<Tenant, { id: number; data: Partial<Tenant> }>({
+
+    // PATCH TENANT
+    patch: builder.mutation<
+      FindOneTenant,
+      { id: number; data: Partial<CreateTenant> }
+    >({
       query: ({ id, data }) => ({
         url: `${tenantApiRoute}/${id}`,
         method: 'PATCH',
         body: data,
       }),
-      //* Optional: invalidates cache for "Tenant"
       invalidatesTags: ['Tenant'],
     }),
-    delete: builder.mutation<Tenant, number>({
+
+    // DELETE TENANT
+    delete: builder.mutation<{ success: boolean }, number>({
       query: (id) => ({
         url: `${tenantApiRoute}/${id}`,
         method: 'DELETE',
       }),
-      //* Optional: invalidates cache for "Tenant"
       invalidatesTags: ['Tenant'],
     }),
   }),
 });
-// Export hooks for usage in functional components
+
+// Export hooks
 export const {
   useGetAllQuery,
   useGetOneQuery,
@@ -79,20 +74,3 @@ export const {
   usePatchMutation,
   useDeleteMutation,
 } = tenantApi;
-
-// * -- createApi Usage --
-/*
- * // Fetch all tenants
- * const { data: tenants, isLoading, error } = useGetAllQuery();
- *
- * // Fetch a tenant by ID
- * const { data: tenant, isLoading: isTenantLoading, error: tenantError } = useGetOneQuery(id);
- *
- * // Create a tenant
- * const [createTenant, { isLoading: isCreating, error: createError }] = useCreateMutation();
- * // createTenant({ username: "john", ... });
- *
- * // Delete a tenant
- * const [deleteTenant, { isLoading: isDeleting, error: deleteError }] = useDeleteMutation();
- * // deleteTenant(id);
- */

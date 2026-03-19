@@ -2,7 +2,7 @@ import 'dotenv/config'; // <-- loads .env automatically
 import * as fs from 'fs';
 import * as path from 'path';
 import { PrismaClient, UserRole } from '@prisma/client';
-// import * as bcrypt from 'bcryptjs'; // for hashing password
+import { CryptoService } from './domains/auth/utilities/crypto.service';
 
 const prisma = new PrismaClient();
 
@@ -58,7 +58,9 @@ async function seed() {
     const isVerified = process.env.ADMIN_IS_VERIFIED === 'true';
 
     // Hash password
-    // const hashedPassword = await bcrypt.hash(passwordPlain, 10);
+
+    const cryptoService = new CryptoService();
+    const hashedPassword = await cryptoService.hashPassword(passwordPlain);
 
     await prisma.admin.upsert({
       where: { email },
@@ -68,7 +70,7 @@ async function seed() {
         firstname,
         lastname,
         email,
-        password: passwordPlain,
+        password: hashedPassword,
         role,
         address,
         phone_number,

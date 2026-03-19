@@ -1,6 +1,5 @@
-import TenantsInfoScreen from '../screens/tenants.info.screen';
-import TenantsMainScreen from '../screens/main.screen/tenants.main.screen';
 import TenantsLayout from './tenants.layout';
+import TenantTableMainScreen from '../screens/tenant-table.main.screen';
 
 export default function TenantsUsersNavigator() {
   return {
@@ -8,8 +7,8 @@ export default function TenantsUsersNavigator() {
     element: <TenantsLayout />,
     children: [
       //* registering navigators
-      { index: true, element: <TenantsMainScreen /> }, //* default screen
-      { path: ':id', element: <TenantsInfoScreen /> },
+      { index: true, element: <TenantTableMainScreen /> }, //* default screen
+      // { path: ':id', element: <TenantsInfoScreen /> },
     ],
   };
 }

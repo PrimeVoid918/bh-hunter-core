@@ -1,203 +1,191 @@
-'use client';
-
-import { BorderRadius, Colors } from '@/pages/constants';
-import styled from '@emotion/styled';
-import Particles from './particles';
-import React from 'react';
-import { useTypedRootNavigation } from '@/app/navigation/RootNavHook';
+import React, { useState } from 'react';
 import {
-  Button,
-  Checkbox,
-  Flex,
-  Text,
-  FormControl,
-  FormLabel,
-  Heading,
-  Input,
-  Stack,
-  Image,
   Box,
-} from '@chakra-ui/react';
-import { useLoginMutation } from '@/infrastructure/auth/auth.redux.api';
+  Button,
+  TextField,
+  Typography,
+  Stack,
+  Container,
+  Paper,
+  IconButton,
+  InputAdornment,
+  Alert,
+} from '@mui/material';
+import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
+import { useLoginMutation } from '@/infrastructure/auth/auth.redux.api';
 import {
-  loginFailure,
   loginSuccess,
+  loginFailure,
 } from '@/infrastructure/auth/auth.redux.slice';
-import AsyncState from '@/pages/shared/components/async-state/AsyncState';
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 
 export default function LoginScreen() {
-  const route = useTypedRootNavigation();
+  const navigate = useNavigate();
   const dispatch = useDispatch();
-  const [username, setUsername] = React.useState('');
-  const [password, setPassword] = React.useState('');
 
-  const [
-    login,
-    { isLoading: isLoginLoading, error, data, isError: isLoginError },
-  ] = useLoginMutation();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async () => {
-    if (!username || !password) {
-      console.log({ username, password });
-      alert('Please fill in both fields');
-      return;
-    }
+  const [login, { isLoading, error }] = useLoginMutation();
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!username || !password) return;
 
     try {
       const result = await login({ username, password }).unwrap();
       dispatch(
         loginSuccess({ token: result.access_token, userData: result.user }),
       );
-      route('/admin');
-    } catch (err) {
-      dispatch(loginFailure(err.message ?? 'Something went wrong'));
+      navigate('/admin'); // Redirect to admin dashboard
+    } catch (err: any) {
+      dispatch(loginFailure(err.data?.message || 'Unauthorized Access'));
     }
   };
 
   return (
-    <Container>
-      <Stack minH={'100vh'} direction={{ base: 'column', md: 'row' }}>
-        <Flex p={8} flex={1} align={'center'} justify={'center'}>
-          <Stack spacing={4} w={'full'} maxW={'md'}>
-            <Heading fontSize={'2xl'}>Sign in to your account</Heading>
-            <FormControl id="email">
-              <FormLabel>Username</FormLabel>
-              <Input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-              />
-            </FormControl>
-            <FormControl id="password">
-              <FormLabel>Password</FormLabel>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </FormControl>
-            <Stack spacing={6}>
-              <Stack
-                direction={{ base: 'column', sm: 'row' }}
-                align={'start'}
-                justify={'space-between'}
-              >
-                <Checkbox>Remember me</Checkbox>
-                <Text color={'blue.500'}>Forgot password?</Text>
-              </Stack>
-              <Button
-                colorScheme={'blue'}
-                variant={'solid'}
-                onClick={handleLogin}
-              >
-                Sign in
-              </Button>
-              <button onClick={handleLogin}> Sign In</button>
-              <Button
-                colorScheme={'blue'}
-                variant={'solid'}
-                onClick={() => route('/')}
-              >
-                Back To Home
-              </Button>
-            </Stack>
-          </Stack>
-        </Flex>
-        <Flex flex={1}>
-          <Image
-            alt={'Login Image'}
-            objectFit={'cover'}
-            src={
-              'https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?ixid=MXwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHw%3D&ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'
-            }
-          />
-        </Flex>
-      </Stack>
-
-      <Particles
-        particleColors={['#ffffff', '#ffffff']}
-        particleCount={200}
-        particleSpread={10}
-        speed={0.1}
-        particleBaseSize={100}
-        moveParticlesOnHover={true}
-        alphaParticles={false}
-        disableRotation={false}
-      />
-      <AsyncState
-        isLoading={isLoginLoading}
-        isError={isLoginError}
-        errorObject={error}
-        errorBody={(err) => {
-          // Narrow types if possible
-          if ('status' in err) {
-            if (err.status >= '500') {
-              return (
-                <Box>
-                  🚨 Server error (500): something went wrong on our side.
-                </Box>
-              );
-            }
-
-            if (err.status >= '400') {
-              return (
-                <Box>
-                  ⚠️ Client error ({err.status}): maybe bad request or
-                  unauthorized.
-                  {/* <pre>{JSON.stringify(err.data, null, 2)}</pre> */}
-                </Box>
-              );
-            }
-          }
-
-          // Fallback for unknown error shapes
-          return (
-            <Box color="gray.500">
-              ❓ Unexpected error
-              <pre>{JSON.stringify(err, null, 2)}</pre>
-            </Box>
-          );
+    <Box
+      sx={{
+        display: 'flex',
+        minHeight: '100vh',
+        bgcolor: 'background.default',
+        fontFamily: 'Poppins',
+      }}
+    >
+      {/* LEFT SIDE: Brand/Visual */}
+      <Box
+        sx={{
+          flex: 1,
+          bgcolor: 'primary.main',
+          display: { xs: 'none', md: 'flex' },
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          color: 'white',
+          p: 6,
+          backgroundImage:
+            'linear-gradient(rgba(53, 127, 193, 0.9), rgba(18, 57, 105, 0.9)), url("https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?auto=format&fit=crop&w=1352&q=80")',
+          backgroundSize: 'cover',
         }}
       >
-        <div></div>
-      </AsyncState>
-    </Container>
+        <AdminPanelSettingsIcon sx={{ fontSize: 80, mb: 2 }} />
+        <Typography variant="h3" fontWeight={800} textAlign="center">
+          BH Hunter
+        </Typography>
+        <Typography variant="h6" sx={{ opacity: 0.8, fontWeight: 400 }}>
+          Internal Administration Portal
+        </Typography>
+      </Box>
+
+      {/* RIGHT SIDE: Form */}
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          p: { xs: 3, md: 8 },
+        }}
+      >
+        <Container maxWidth="xs">
+          <Button
+            startIcon={<ArrowBackIcon />}
+            onClick={() => navigate('/')}
+            sx={{ mb: 4, color: 'text.secondary', fontWeight: 700 }}
+          >
+            Back to Website
+          </Button>
+
+          <Stack spacing={1} mb={4}>
+            <Typography variant="h4" fontWeight={800} color="text.primary">
+              Admin Login
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Authorized access only. Please enter your credentials.
+            </Typography>
+          </Stack>
+
+          {error && (
+            <Alert
+              severity="error"
+              variant="outlined"
+              sx={{ mb: 3, borderRadius: 3 }}
+            >
+              Invalid username or password.
+            </Alert>
+          )}
+
+          <Box component="form" onSubmit={handleLogin}>
+            <Stack spacing={2.5}>
+              <TextField
+                fullWidth
+                label="Username"
+                variant="outlined"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoFocus
+                slotProps={{
+                  inputLabel: { shrink: true },
+                }}
+              />
+              <TextField
+                fullWidth
+                label="Password"
+                type={showPassword ? 'text' : 'password'}
+                variant="outlined"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton
+                        onClick={() => setShowPassword(!showPassword)}
+                        edge="end"
+                      >
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                }}
+              />
+
+              <Button
+                fullWidth
+                type="submit"
+                variant="contained"
+                size="large"
+                disabled={isLoading}
+                sx={{
+                  py: 1.5,
+                  fontSize: '1rem',
+                  boxShadow: 'none',
+                  '&:hover': { boxShadow: 'none' },
+                }}
+              >
+                {isLoading ? 'Verifying...' : 'Sign In to Portal'}
+              </Button>
+            </Stack>
+          </Box>
+
+          <Typography
+            variant="caption"
+            color="text.disabled"
+            sx={{ display: 'block', mt: 6, textAlign: 'center' }}
+          >
+            BH Hunter Boarding House Management System
+            <br />
+            Ormoc City Capstone Project 2024
+          </Typography>
+        </Container>
+      </Box>
+    </Box>
   );
 }
-
-const Container = styled.div`
-  min-height: 100dvh;
-  min-width: 100dvw;
-  height: 100dvh;
-  width: 100dvw;
-  position: 'relative';
-
-  color: ${Colors.TextInverse[2]};
-  background-color: black;
-
-  > :nth-of-type(2) {
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 1;
-  }
-
-  > :nth-of-type(1) {
-    /* aspect-ratio: 1; */
-    /* height: 400px; */
-    position: absolute;
-    top: 50%;
-    width: 100%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    border-radius: ${BorderRadius.md};
-    z-index: 5;
-
-    padding: 1rem;
-
-    /* background-color: ${Colors.PrimaryLight[8]}; */
-    background-color: transparent;
-    /* background-color: green; */
-  }
-`;

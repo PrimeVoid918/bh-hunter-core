@@ -142,7 +142,7 @@ export default function LandingNavBar() {
               onClick={() => navigate('/auth/login')}
               sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
             >
-              Login
+              Admin Portal
             </Button>
 
             <IconButton

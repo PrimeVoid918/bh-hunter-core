@@ -23,6 +23,7 @@ import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-
 import { AuthService } from '../auth/auth.service';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { CryptoService } from '../auth/utilities/crypto.service';
 
 @Injectable()
 export class OwnersService {
@@ -31,6 +32,7 @@ export class OwnersService {
     private readonly verificationService: VerifcationService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
+    private readonly cryptoService: CryptoService,
     private readonly logger: Logger,
     private readonly accountsPublisher: AccountsPublisher,
     private readonly subscriptionsService: SubscriptionsService,
@@ -40,61 +42,88 @@ export class OwnersService {
     return this.database.getClient();
   }
 
-  findAll({
+  async findAll({
     username = '',
     page = 1,
     offset = 15,
     isDeleted = false,
     isActive,
-    isVerified,
-  }: FindOwnersDto): Promise<Partial<Owner>[]> {
-    const userToSkip = (page - 1) * offset;
+  }: FindOwnersDto) {
+    const prisma = this.prisma;
+    const skip = (page - 1) * offset;
 
-    return this.prisma.owner.findMany({
-      skip: userToSkip,
-      take: offset,
-      where: {
-        ...(username !== undefined &&
-          username.trim() !== '' && {
-            username: { contains: username, mode: 'insensitive' },
-          }),
-        isDeleted,
-        ...(isActive !== undefined && { isActive }),
-        ...(isVerified !== undefined && { isVerified }),
-      },
-      orderBy: { username: 'asc' },
-      select: {
-        id: true,
-        username: true,
-        firstname: true,
-        lastname: true,
-        email: true,
-        role: true,
-        isActive: true,
-        // isVerified: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    // Base where clause (same pattern as tenants)
+    const whereClause: any = {
+      isDeleted,
+      ...(username.trim() !== '' && {
+        username: { contains: username, mode: 'insensitive' },
+      }),
+      ...(isActive !== undefined && { isActive }),
+    };
+
+    const [totalCount, owners] = await prisma.$transaction([
+      prisma.owner.count({ where: whereClause }),
+      prisma.owner.findMany({
+        skip,
+        take: offset,
+        where: whereClause,
+        orderBy: { username: 'asc' },
+        select: {
+          id: true,
+          firstname: true,
+          lastname: true,
+          username: true,
+          email: true,
+          role: true,
+          isActive: true,
+          verificationLevel: true, // already stored
+          registrationStatus: true, // already stored
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+
+    // Map to table-ready format (MATCH tenants)
+    const results = await Promise.all(
+      owners.map(async (owner) => {
+        // Only check if permits exist (NOT full documents)
+        const verificationDocs = await prisma.verificationDocument.findMany({
+          where: {
+            userId: owner.id,
+            userType: 'OWNER',
+            verificationStatus: 'APPROVED',
+            isDeleted: false,
+          },
+          select: { id: true }, // lightweight
+        });
+
+        const subscription = await this.getCurrentSubscription(owner.id);
+
+        return {
+          ...owner,
+          fullname: `${owner.firstname ?? ''} ${owner.lastname ?? ''}`.trim(),
+          verified: owner.verificationLevel === 'FULLY_VERIFIED',
+          hasPermits: verificationDocs.length > 0,
+          subscription, // owners-only field
+        };
+      }),
+    );
+
+    return Array.isArray(results) ? results : [results];
   }
 
-  findOne(id: number) {
-    if (!id) {
-      throw new BadRequestException('Id is required');
-    }
+  async findOne(id: number) {
+    if (!id) throw new BadRequestException('Id is required');
 
-    const prisma = this.prisma;
-    return prisma.owner.findUnique({
-      where: {
-        id: id,
-      },
+    const { ...owner } = await this.prisma.owner.findUnique({
+      where: { id },
       select: {
         id: true,
         username: true,
         firstname: true,
         lastname: true,
         email: true,
-        password: true,
         role: true,
         isActive: true,
         registrationStatus: true,
@@ -104,17 +133,32 @@ export class OwnersService {
         age: true,
         address: true,
         phone_number: true,
-        isDeleted: true,
-        deletedAt: true,
         consentAcceptedAt: true,
         hasAcceptedLegitimacyConsent: true,
         boardingHouses: {
-          select: {
-            id: true,
-          },
+          select: { id: true },
         },
       },
     });
+
+    if (!owner) throw new NotFoundException('Owner not found');
+
+    const verification = await this.authService.getVerificationStatus(
+      owner.id,
+      'OWNER',
+    );
+    const subscription = await this.getCurrentSubscription(owner.id);
+
+    return {
+      ...owner,
+      fullname: `${owner.firstname ?? ''} ${owner.lastname ?? ''}`.trim(),
+      verified: verification.verificationLevel === 'FULLY_VERIFIED',
+      verificationLevel: verification.verificationLevel,
+      registrationStatus: verification.registrationStatus,
+      boardingHouses: owner.boardingHouses?.map((b) => ({ id: b.id })) ?? [],
+      subscription,
+      verificationDocuments: verification.verificationDocuments,
+    };
   }
 
   findUserByUsername(username: string) {
@@ -144,15 +188,17 @@ export class OwnersService {
 
   async create(dto: CreateOwnerDto) {
     //! enable on prod
-    // const hashedPassword = await bcrypt.hash(dto.password, 10);
     try {
+      const hashedPassword = await this.cryptoService.hashPassword(
+        dto.password,
+      );
       const created = await this.prisma.owner.create({
         data: {
           username: dto.username,
           firstname: dto.firstname,
           lastname: dto.lastname,
           email: dto.email,
-          password: dto.password, // assume already hashed
+          password: hashedPassword,
           age: dto.age,
           address: dto.address,
           phone_number: dto.phone_number,

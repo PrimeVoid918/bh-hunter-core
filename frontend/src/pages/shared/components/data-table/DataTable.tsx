@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   DataTable as PrimeDataTable,
   DataTableFilterMeta,
@@ -7,12 +7,19 @@ import {
 import { Column } from 'primereact/column';
 import { FilterMatchMode } from 'primereact/api';
 import styled from '@emotion/styled';
-import { BorderRadius, Colors, Spacing } from '@/pages/constants';
-import { useColorMode } from '@chakra-ui/react';
+import {
+  useTheme,
+  Box,
+  TextField,
+  InputAdornment,
+  Divider,
+  Typography,
+} from '@mui/material';
+import { Search as SearchIcon } from '@mui/icons-material';
 import { TableProps } from './types';
-import { IconField } from 'primereact/iconfield';
-import { InputIcon } from 'primereact/inputicon';
-import { InputText } from 'primereact/inputtext';
+
+// Import PrimeReact Core (Keep these)
+import 'primereact/resources/primereact.min.css';
 import 'primeicons/primeicons.css';
 
 export default function DataTable<T>({
@@ -23,32 +30,27 @@ export default function DataTable<T>({
   headerButtonSlot,
   setPageIndex = () => {},
 }: TableProps<T>) {
-  const { colorMode } = useColorMode();
-  const containerRef = React.useRef<HTMLDivElement>(null);
-  const typedData = data as DataTableValueArray;
+  const theme = useTheme();
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // PROCESS DATA FOR SEARCHABILITY
-  const processedData = React.useMemo(() => {
+  // 1. Data Flattening Logic (Keep your existing logic, it's solid)
+  const processedData = useMemo(() => {
     return data.map((row: any) => {
       const flattenedRow = { ...row };
-
       tableConfig.forEach((config) => {
-        // 1. If a custom resolver exists (e.g., for Full Name)
         if (config.resolveValue) {
           flattenedRow[config.field] = config.resolveValue(row);
-        }
-        // 2. If it's a nested dot-notation field (e.g., "user.email")
-        else if (config.field.includes('.')) {
+        } else if (config.field.includes('.')) {
           flattenedRow[config.field] = config.field
             .split('.')
             .reduce((acc, part) => acc?.[part], row);
         }
       });
-
       return flattenedRow;
     });
   }, [data, tableConfig]);
 
+  // 2. Filter Logic
   const initialFilters: DataTableFilterMeta = {
     global: { value: null, matchMode: FilterMatchMode.CONTAINS },
     ...Object.fromEntries(
@@ -61,423 +63,170 @@ export default function DataTable<T>({
       ]),
     ),
   };
-  // const initialFilters: DataTableFilterMeta = {
-  //   global: { value: null, matchMode: FilterMatchMode.CONTAINS },
-  //   ...Object.fromEntries(
-  //     tableConfig.map((col) => [
-  //       col.field,
-  //       {
-  //         value: null,
-  //         matchMode: col.filterMatchMode ?? FilterMatchMode.CONTAINS,
-  //       },
-  //     ]),
-  //   ),
-  // };
 
   const [filters, setFilters] = useState<DataTableFilterMeta>(initialFilters);
   const [globalFilterValue, setGlobalFilterValue] = useState<string>('');
 
   const onGlobalFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-
-    // clone current filters
     const _filters = { ...filters };
-    // assign to global
-    _filters['global'].value = value;
-
+    (_filters['global'] as any).value = value;
     setFilters(_filters);
     setGlobalFilterValue(value);
   };
 
+  // 3. M3 Header Design
   const renderHeader = () => (
-    <div className="global-filter">
-      <div>
-        <IconField iconPosition="left">
-          <InputIcon className="pi pi-search" />
-          <InputText
-            value={globalFilterValue}
-            onChange={onGlobalFilterChange}
-            placeholder="Keyword Search"
-          />
-        </IconField>
-        <div>{headerButtonSlot}</div>
-      </div>
-      <hr></hr>
-    </div>
+    <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <TextField
+          size="small"
+          placeholder="Global search..."
+          value={globalFilterValue}
+          onChange={onGlobalFilterChange}
+          autoComplete="off"
+          slotProps={{
+            input: {
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
+                </InputAdornment>
+              ),
+              sx: { borderRadius: '100px', bgcolor: 'background.default' },
+            },
+          }}
+          sx={{ width: 300 }}
+        />
+        <Box>{headerButtonSlot}</Box>
+      </Box>
+      <Divider />
+    </Box>
   );
 
   return (
-    <TableContainer colorMode={colorMode} ref={containerRef}>
+    <StyledTableWrapper theme={theme}>
       <PrimeDataTable
         value={processedData as DataTableValueArray}
-        // value={typedData}
         paginator
         rows={10}
         onPage={(e) => setPageIndex(e.page ?? 0)}
         dataKey="id"
         filters={filters}
         filterDisplay="row"
-        // globalFilterFields={tableConfig
-        //   .filter((c) => c.field !== 'actions')
-        //   .map((c) => c.field as string)}
         globalFilterFields={tableConfig
           .filter((c) => c.field !== 'actions')
           .map((c) => c.field)}
         header={enableGlobalSearch ? renderHeader() : undefined}
-        emptyMessage={emptyTableMessage}
+        emptyMessage={
+          <Typography
+            variant="body2"
+            sx={{ textAlign: 'center', py: 4, color: 'text.secondary' }}
+          >
+            {emptyTableMessage || 'No records found.'}
+          </Typography>
+        }
         scrollable
-        scrollHeight="flex" // or a fixed px height if you prefer
-        style={{ flex: 1 }}
+        scrollHeight="flex"
+        className="bh-hunter-table"
       >
         {tableConfig.map((config, index) => (
           <Column
             key={index}
-            // field={config.field as string}
             field={config.field}
             header={config.columnName}
-            filter={!!config.filterType} // only true if filterType exists
-            filterPlaceholder={config.placeholder}
-            showFilterMenu={
-              !(
-                config.filterType === 'dropdown' ||
-                config.filterType === 'input'
-              )
-            }
-            filterElement={
-              config.filterElement
-                ? (options) =>
-                    config.filterElement!(options, containerRef.current)
-                : undefined
-            }
-            // body={
-            //   config.body
-            //     ? (rowData) => config.body!(rowData)
-            //     : config.actionComponent
-            //       ? (rowData) => (
-            //           <div
-            //             style={{ display: 'flex', gap: '1rem' }}
-            //             className="actions"
-            //           >
-            //             {config.actionComponent!(rowData)}
-            //           </div>
-            //         )
-            //       : (rowData) => <>{(rowData as any)[config.field]}</>
-            // }
+            filter={!!config.filterType}
+            showFilterMenu={false}
             body={(rowData) => {
               if (config.body) return config.body(rowData);
               if (config.actionComponent)
                 return (
-                  <div className="actions">
+                  <Box sx={{ display: 'flex', gap: 1 }}>
                     {config.actionComponent(rowData)}
-                  </div>
+                  </Box>
                 );
-              // Fallback to the resolved/flattened value
-              return <>{rowData[config.field] ?? ''}</>;
+              return (
+                <Typography variant="body2">
+                  {rowData[config.field] ?? '—'}
+                </Typography>
+              );
             }}
-            style={{ minWidth: '14rem' }}
+            style={{ minWidth: '12rem' }}
           />
         ))}
       </PrimeDataTable>
-    </TableContainer>
+    </StyledTableWrapper>
   );
 }
 
-const TableContainer = styled.div<{ colorMode: string }>`
-  --bg-color: ${({ colorMode }) =>
-    colorMode === 'light' ? Colors.PrimaryLight[2] : Colors.PrimaryLight[8]};
+// 4. CSS Overrides to kill the "Prime" look and inject "BH Hunter" look
+const StyledTableWrapper = styled.div<{ theme: any }>`
+  width: 100%;
+  height: 100%;
 
-  background-color: var(--bg-color);
-  display: flex;
-  flex-direction: column;
-  min-height: 88dvh;
-  max-height: 88dvh;
-  border: 2px solid
-    ${({ colorMode }) =>
-      colorMode === 'light' ? Colors.PrimaryLight[7] : Colors.PrimaryLight[5]};
-  padding: 1rem;
-  border-radius: 1rem;
-
-  > :nth-of-type() {
-    display: flex;
-    flex-direction: column;
-
-    > :nth-of-type(1) {
-      flex: 1;
-
-      scrollbar-width: 100px;
-      scrollbar-color: ${({ colorMode }) =>
-        colorMode === 'light'
-          ? `color-mix(in srgb, var(--dark), black 60%) transparent`
-          : `color-mix(in srgb, var(--light), white 45%) transparent`};
+  .p-datatable.bh-hunter-table {
+    .p-datatable-header {
+      background: transparent;
+      border: none;
+      padding: 0;
     }
 
-    > :nth-of-type(2) {
-      margin-top: auto;
-      display: flex;
-      flex-direction: row;
-      gap: 1rem;
-      justify-content: center;
-      justify-self: flex-end;
+    .p-datatable-thead > tr > th {
+      background: ${({ theme }) => theme.palette.background.default};
+      color: ${({ theme }) => theme.palette.text.secondary};
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid ${({ theme }) => theme.palette.outlineVariant};
       padding: 1rem;
-      > :nth-of-type(1) {
-      }
-    }
-  }
-
-  --light: ${Colors.PrimaryLight[9]};
-  --dark: ${Colors.PrimaryLight[3]};
-  --light-highlight: ${Colors.PrimaryLight[6]};
-  --dark-highlight: ${Colors.PrimaryLight[5]};
-  --text-l: ${Colors.TextInverse[5]};
-  --text-d: ${Colors.TextInverse[2]};
-  --border-color: ${Colors.PrimaryLight[9]};
-  --debug-border-color: green;
-  --hidden-button-width: 1rem;
-
-  .p-datatable {
-    border-radius: 8px;
-    overflow: hidden;
-    background: var(--color1);
-  }
-
-  //* Table Header & Filters
-
-  .p-datatable-thead > tr:nth-of-type(2) > th.p-filter-column,
-  .p-datatable-thead > tr:nth-of-type(1) > th > *,
-  .p-datatable-thead > tr:nth-of-type(2) > th > * {
-    /* border: 3px solid green; */
-    background: ${({ colorMode }) =>
-      colorMode === 'light' ? Colors.PrimaryLight[2] : Colors.PrimaryLight[8]};
-    &:not(th.p-filter-column) {
-      border-bottom: 2px solid
-        ${({ colorMode }) =>
-          colorMode === 'dark'
-            ? Colors.PrimaryLight[2]
-            : Colors.PrimaryLight[8]};
-      max-height: 4rem;
-      min-height: 4rem;
-    }
-  }
-
-  .global-filter {
-    padding: 0rem 1rem 0rem 0rem;
-    gap: 1rem;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    > hr {
-      width: 100%;
-      border-bottom: 2px solid
-        ${({ colorMode }) =>
-          colorMode === 'dark'
-            ? Colors.PrimaryLight[2]
-            : Colors.PrimaryLight[8]};
     }
 
-    > div {
-      display: flex;
-      flex-direction: row;
-      justify-content: space-between;
-      width: 100%;
+    .p-datatable-tbody > tr {
+      background: ${({ theme }) => theme.palette.background.paper};
+      transition: background 0.2s;
 
-      > :nth-of-type(2) {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+      &:hover {
+        background: ${({ theme }) =>
+          theme.palette.primary.light}33; // 20% opacity
       }
 
-      > .p-icon-field {
-        width: auto;
-        > span {
-          padding: 1rem 1rem;
-        }
-        > input {
-          background-color: transparent;
-          padding: 0.5rem 1rem 0.5rem 0.5rem;
-          color: ${({ colorMode }) =>
-            colorMode === 'dark'
-              ? Colors.TextInverse[2]
-              : Colors.TextInverse[5]};
-          &::placeholder {
-            color: ${({ colorMode }) =>
-              colorMode === 'dark'
-                ? Colors.TextInverse[3]
-                : Colors.TextInverse[4]};
-            opacity: 1; // ✅ Some browsers (esp. Firefox) need this
-          }
+      > td {
+        padding: 1rem;
+        border-bottom: 1px solid ${({ theme }) => theme.palette.outlineVariant};
+      }
+    }
+
+    /* Paginator Styling */
+    .p-paginator {
+      background: transparent;
+      border: none;
+      padding: 1rem;
+      justify-content: flex-end;
+
+      .p-paginator-page,
+      .p-paginator-next,
+      .p-paginator-last,
+      .p-paginator-first,
+      .p-paginator-prev {
+        border-radius: 100px;
+        min-width: 32px;
+        height: 32px;
+        margin: 0 4px;
+        border: none;
+        color: ${({ theme }) => theme.palette.text.primary};
+
+        &.p-highlight {
+          background: ${({ theme }) => theme.palette.primary.main};
+          color: white;
         }
       }
     }
-
-    > div {
-      > :nth-of-type(1) {
-        overflow: hidden;
-        border-radius: 0.5rem;
-        background: ${({ colorMode }) =>
-          colorMode === 'light'
-            ? Colors.PrimaryLight[3]
-            : Colors.PrimaryLight[9]};
-      }
-    }
   }
-
-  .p-datatable-thead > tr:nth-of-type(1) > th > * {
-    padding: 1rem 1.5rem;
-    font-weight: 600;
-
-    /* wrapping */
-    white-space: nowrap; /* don’t wrap words */
-    min-width: 8rem; /* adjust based on your shortest header */
-    text-overflow: ellipsis; /* optional: show "…" when too small */
-    overflow: hidden; /* needed for ellipsis to work */
-  }
-
-  .p-datatable-thead > tr:nth-of-type(2) > th > * {
-    padding: 0.75rem 1rem;
-
-    display: flex;
-    flex-direction: row;
-    gap: ${Spacing.md};
-    > *:nth-of-type(1) {
-      input {
-        padding: ${Spacing.sm};
-        border-radius: ${BorderRadius.md};
-        background: ${({ colorMode }) =>
-          colorMode === 'light'
-            ? Colors.PrimaryLight[3]
-            : Colors.PrimaryLight[9]};
-        color: ${({ colorMode }) =>
-          colorMode === 'dark' ? Colors.TextInverse[2] : Colors.TextInverse[5]};
-      }
-      > :nth-of-type(1) {
-        display: flex;
-        flex-direction: row;
-        gap: ${Spacing.sm};
-        > :nth-of-type(1) {
-          background: ${({ colorMode }) =>
-            colorMode === 'light'
-              ? Colors.PrimaryLight[2]
-              : Colors.PrimaryLight[9]};
-          color: ${({ colorMode }) =>
-            colorMode === 'dark'
-              ? Colors.TextInverse[2]
-              : Colors.TextInverse[5]};
-          padding: ${Spacing.sm};
-          border-radius: ${BorderRadius.md};
-        }
-      }
-    }
-
-    .p-column-filter-clear-button {
-      /* border: 2px solid green; */
-      width: var(--hidden-button-width);
-    }
-  }
-  //* Table Header & Filters
-
-  //* Body Rows
-  .p-datatable-tbody > tr {
-    height: 100%;
-  }
-
-  .p-datatable-tbody > tr:hover {
-    background: ${({ colorMode }) =>
-      colorMode === 'dark' ? Colors.PrimaryLight[7] : Colors.PrimaryLight[3]};
-    color: ${({ colorMode }) =>
-      colorMode === 'light' ? `var(--text-l)` : `var(--text-d) !important`};
-  }
-
-  .p-datatable-tbody > tr > td {
-    padding: 0;
-    height: 100%;
-    vertical-align: middle;
-    padding: 0rem 0rem 0rem 1rem;
-  }
-
-  .p-datatable-tbody > tr > td > * {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%;
-    padding: 0.8rem 0.5rem;
-    box-sizing: border-box;
-
-    &:not(.actions) {
-      padding: 0.8rem 1rem;
-      justify-content: start;
-    }
-  }
-
-  //* Body Rows
-
-  //* Buttons
-
-  //* Buttons
-
-  //* Paginator
-  .p-paginator {
-    border-top: 1px solid #e5e7eb;
-    padding: 0.5rem;
-    justify-content: center; /* align to right */
-  }
-
-  .p-paginator .p-paginator-page {
-    border-radius: 6px;
-    margin: 0 2px;
-  }
-
-  .p-paginator .p-highlight {
-    background-color: ${({ colorMode }) =>
-      colorMode === 'light' ? `var(--light)` : `var(--dark) !important`};
-    padding: 0.2rem 0.6rem;
-    color: ${({ colorMode }) =>
-      colorMode === 'dark' ? `var(--text-l)` : `var(--text-d) !important`};
-  }
-  //* Paginator
-
-  //* Tags and Badges
-  .p-tag {
-    border-radius: 6px;
-    font-weight: 600;
-    font-size: 0.75rem;
-    padding: 0.25rem 0.5rem;
-  }
-  //* Tags and Badges
-
-  //* Dropdown Styles
-  .status-panel {
-    border-radius: 8px;
-    background-color: ${({ colorMode }) =>
-      colorMode === 'light'
-        ? `color-mix(in srgb, var(--dark), black 10%)`
-        : `color-mix(in srgb, var(--light), black 10%)`};
-    border: 2px solid
-      ${({ colorMode }) =>
-        colorMode === 'light'
-          ? `color-mix(in srgb, var(--dark), black 10%)`
-          : `color-mix(in srgb, var(--light), black 25%)`};
-  }
-  .status-panel .p-dropdown-items {
-    > *:hover {
-      background-color: ${({ colorMode }) =>
-        colorMode === 'dark'
-          ? `color-mix(in srgb, var(--dark), black 10%)`
-          : `color-mix(in srgb, var(--light), white 30%)`};
-      color: ${({ colorMode }) =>
-        colorMode === 'dark' ? `var(--text-l)` : `var(--text-d) !important`};
-    }
-  }
-  .status-panel .p-dropdown-item {
-    padding: 0.5rem 0.75rem;
-  }
-  .status-panel .p-dropdown-item.p-highlight {
-    background-color: ${({ colorMode }) =>
-      colorMode === 'dark'
-        ? `color-mix(in srgb, var(--dark), black 60%)`
-        : `color-mix(in srgb, var(--light), white 45%)`};
-    color: ${({ colorMode }) =>
-      colorMode === 'light' ? `var(--text-l)` : `var(--text-d) !important`};
-  }
-  //* Dropdown Styles
 `;

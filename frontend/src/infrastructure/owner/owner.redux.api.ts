@@ -1,7 +1,7 @@
 import { BACKEND_API } from '@/app/config/api';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { ApiResponseType } from '../common/types/backend-reponse.type';
-import { Owner } from './owner.types';
+import { CreateOwner, FindAllOwners, FindOneOwner } from './owner.types';
 import { VerificationDocumentStatus } from '../documents/documents.type';
 
 //* -- RTK ---
@@ -20,20 +20,20 @@ export const ownerApi = createApi({
   }),
 
   endpoints: (builder) => ({
-    getAll: builder.query<Owner[], void>({
+    getAll: builder.query<FindAllOwners[], void>({
       // TODO: add pagination
       query: () => ownerApiRoute,
-      transformResponse: (response: ApiResponseType<Owner[]>) =>
+      transformResponse: (response: ApiResponseType<FindAllOwners[]>) =>
         response.results ?? [],
     }),
-    getOne: builder.query<Owner, number>({
+    getOne: builder.query<FindOneOwner, number>({
       query: (id) => `${ownerApiRoute}/${id}`,
-      transformResponse: (response: ApiResponseType<Owner>) =>
+      transformResponse: (response: ApiResponseType<FindOneOwner>) =>
         response.results ?? null,
       //* Optional: invalidates cache for `Owner`
       providesTags: (result, error, id) => [{ type: 'Owner', id }],
     }),
-    create: builder.mutation<Owner, Partial<Owner>>({
+    create: builder.mutation<CreateOwner, Partial<CreateOwner>>({
       query: (data) => {
         const trans = {
           ...data,
@@ -62,7 +62,10 @@ export const ownerApi = createApi({
         return response.results!;
       },
     }),
-    patch: builder.mutation<Owner, { id: number; data: Partial<Owner> }>({
+    patch: builder.mutation<
+      FindOneOwner,
+      { id: number; data: Partial<CreateOwner> }
+    >({
       query: ({ id, data }) => ({
         url: `${ownerApiRoute}/${id}`,
         method: 'PATCH',
@@ -71,7 +74,7 @@ export const ownerApi = createApi({
       //* Optional: invalidates cache for `Owner`
       invalidatesTags: ['Owner'],
     }),
-    delete: builder.mutation<Owner, number>({
+    delete: builder.mutation<{ success: boolean }, number>({
       query: (id) => ({
         url: `${ownerApiRoute}/${id}`,
         method: 'DELETE',

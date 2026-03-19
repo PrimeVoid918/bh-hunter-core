@@ -10,38 +10,34 @@ import {
 } from '@mui/material';
 import { useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-
 import AsyncState from '@/pages/shared/components/async-state/AsyncState';
-import ValidationTable from '@/pages/shared/modules/validation-table/ValidationTable';
+import UsersTable, {
+  UserTableRow,
+} from '@/pages/shared/modules/users-table/UsersTable';
 import {
   useGetAllQuery,
-  useDeleteMutation,
   usePatchMutation,
-} from '@/infrastructure/valid-docs/valid-docs.redux.api';
-import { VerificationDocumentMetaData } from '@/infrastructure/documents/documents.type';
+  useDeleteMutation,
+} from '@/infrastructure/owner/owner.redux.api';
 import { selectAdminId } from '@/infrastructure/auth/auth.redux.slice';
+import { FindOneOwner } from '@/infrastructure/owner/owner.types';
 
-export default function TenantsValidationMainScreen() {
+export default function OwnersTableMainScreen() {
   const navigate = useNavigate();
   const adminId = useSelector(selectAdminId);
-  const thisTableIsFor = 'tenants';
+  const thisTableIsFor: 'OWNER' = 'OWNER';
 
-  // API Hooks
-  const { data, isLoading, isError, error, refetch } =
-    useGetAllQuery(thisTableIsFor);
-  const [deleteDocument] = useDeleteMutation();
-  const [patchDocument] = usePatchMutation();
+  // Queries & mutations
+  const { data, isLoading, isError, error, refetch } = useGetAllQuery();
+  const [patchOwner] = usePatchMutation();
+  const [deleteOwner] = useDeleteMutation();
 
-  // Notification State
+  // Toast state
   const [toast, setToast] = useState<{
     open: boolean;
     message: string;
     severity: 'success' | 'error' | 'info' | 'warning';
-  }>({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+  }>({ open: false, message: '', severity: 'success' });
 
   const showToast = (message: string, severity: typeof toast.severity) =>
     setToast({ open: true, message, severity });
@@ -49,53 +45,35 @@ export default function TenantsValidationMainScreen() {
   if (!adminId) {
     return (
       <Alert severity="error" variant="outlined" sx={{ borderRadius: 3 }}>
-        Access Denied: Admin session invalid.
+        Security Context Error: Admin ID could not be verified. Please re-login.
       </Alert>
     );
   }
 
-  const handleApprove = async (row: VerificationDocumentMetaData) => {
+  // Actions
+  const handleUpdateOwner = async (row: UserTableRow) => {
     try {
-      await patchDocument({
-        id: row.id,
-        sourceTarget: thisTableIsFor,
-        payload: { adminId, verificationStatus: 'APPROVED' },
-      }).unwrap();
-      showToast(`Tenant ${row.verificationType} approved.`, 'success');
+      await patchOwner({ id: (row as FindOneOwner).id, data: {} }).unwrap();
+      showToast(`Owner updated successfully.`, 'success');
+      refetch();
     } catch {
-      showToast(`Approval failed.`, 'error');
+      showToast(`Failed to update owner.`, 'error');
     }
   };
 
-  const handleReject = async (row: VerificationDocumentMetaData) => {
+  const handleDeleteOwner = async (row: UserTableRow) => {
     try {
-      await patchDocument({
-        id: row.id,
-        sourceTarget: thisTableIsFor,
-        payload: { adminId, verificationStatus: 'REJECTED' },
-      }).unwrap();
-      showToast(`Tenant ${row.verificationType} rejected.`, 'warning');
+      await deleteOwner((row as FindOneOwner).id).unwrap();
+      showToast(`Owner record deleted.`, 'info');
+      refetch();
     } catch {
-      showToast(`Rejection action failed.`, 'error');
-    }
-  };
-
-  const handleDelete = async (row: VerificationDocumentMetaData) => {
-    try {
-      await deleteDocument({
-        id: row.id,
-        sourceTarget: thisTableIsFor,
-        adminId,
-      }).unwrap();
-      showToast(`Record deleted.`, 'info');
-    } catch {
-      showToast(`Delete failed.`, 'error');
+      showToast(`Failed to delete owner.`, 'error');
     }
   };
 
   return (
     <Box>
-      {/* BREADCRUMBS & TITLE */}
+      {/* Breadcrumbs */}
       <Stack spacing={1} mb={4}>
         <Breadcrumbs sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
           <Link
@@ -110,50 +88,50 @@ export default function TenantsValidationMainScreen() {
             color="text.primary"
             sx={{ fontSize: '0.75rem', fontWeight: 700 }}
           >
-            Validation
+            Maintenance
           </Typography>
           <Typography
             color="text.primary"
             sx={{ fontSize: '0.75rem', fontWeight: 700 }}
           >
-            Tenants
+            Owners
           </Typography>
         </Breadcrumbs>
+
         <Typography variant="h4" fontWeight={800}>
-          Tenant Verification
+          Owners Maintenance
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Manage and verify government-issued IDs for boarding house seekers.
+          Manage owner accounts: suspend, update, or delete records as needed.
         </Typography>
       </Stack>
 
-      {/* DATA TABLE CONTAINER */}
+      {/* Table */}
       <AsyncState
         isLoading={isLoading}
         isError={isError}
         error={error}
         onRetry={refetch}
       >
-        <ValidationTable
+        <UsersTable
           data={data ?? []}
           thisTableIsFor={thisTableIsFor}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onDelete={handleDelete}
+          onSuspend={handleUpdateOwner} // you can create a separate suspend function if needed
+          onDelete={handleDeleteOwner}
         />
       </AsyncState>
 
-      {/* TOAST NOTIFICATION */}
+      {/* Toasts */}
       <Snackbar
         open={toast.open}
-        autoHideDuration={3000}
+        autoHideDuration={4000}
         onClose={() => setToast({ ...toast, open: false })}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
       >
         <Alert
           severity={toast.severity}
           variant="filled"
-          sx={{ borderRadius: 2 }}
+          sx={{ width: '100%', borderRadius: 2 }}
         >
           {toast.message}
         </Alert>

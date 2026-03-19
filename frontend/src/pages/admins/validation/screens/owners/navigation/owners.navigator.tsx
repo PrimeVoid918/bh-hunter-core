@@ -1,4 +1,3 @@
-// import OwnersInfoScreen from '../screens/owners.info.screen';
 import OwnersValidationMainScreen from '../screens/owners.validation.main.screen';
 import OwnersLayout from './owners.layout';
 

@@ -35,11 +35,12 @@ export class AuthService {
 
     const { user, type } = result;
 
-    //! enable on prod
-    // const isPasswordValid = await this
-    // TODO: implement password validation helper
+    const isPasswordValid = await this.cryptoService.comparePassword(
+      password,
+      user.password,
+    );
     // * use cryptoService for comparing hashed and normal password
-    if (!(user.password === password)) {
+    if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid password');
     }
 
@@ -226,60 +227,3 @@ export class AuthService {
     );
   }
 }
-
-// TODO: Finish below
-/*
- *
- * ### Controller
- * - POST /login
- * - POST  /register
- * - POST /refresh
- * - POST /logout
- * - POST /2fa/verify (optional if using 2FA)
- * - POST /password/reset-request
- * - POST /password/reset
- * 		`Keep controller logic very thin, just forwarding to the service`
- *
- * ### Services
- * - `validateUser(email, password)`
- * - `login(user)`
- * - `register(userDTO)`
- * - `refreshToken(oldToken)`
- * - `logout(user)`
- * - `requestPasswordReset(email)`
- * - `resetPassword(token, newPassword)`
- * - `verify2FA(....)`
- *
- * ### Guards
- * - `JwtAuthGuard`
- * - `RolesGuard(for RBAC)`
- * - `TwoFactorGuard (optional if you want 2FA inforcement)`
- *
- * ### Strategies (if using @nestjs/passport)
- * 	Used to plug into Nest's AuthGuard system
- * - JwtStrategy
- * - LocalStrategy (for username/password login)
- *
- * ### DTO's (Data Transfer Objects)
- * 	Keeps request validation and typing consistent
- * - LoginDto
- * - RegisterDto
- * - RefreshTokenDto
- * - ResetPasswordDto
- * - RequestRestDto
- *
- * ### Interfaces / Contracts
- * - IAuthPayload
- * - IJwtPayload
- * - IUserFromRequest
- *
- * ### Tokens / Helpers / Utilities
- * 	You can extract this to shared libs or keep them inside auth.utils
- * 	These help decouple things like signToken(), verifyToken(), generate2FASecret() from the service logic
- * - jwt.helper.ts
- * - hash.helper.ts
- * - 2fa.helper.ts
- *
- * ### Middlewares (optional)
- * 	if you want token parsing or ealr user cheks before guards
- */

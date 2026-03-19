@@ -32,6 +32,7 @@ import { UpdateVerifcationDto } from '../verifications/dto/update-verifcation.dt
 import { FindOneVerificationDto } from '../verifications/dto/findOne-verification.dto';
 import { AuthService } from '../auth/auth.service';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
+import { CryptoService } from '../auth/utilities/crypto.service';
 
 @Injectable()
 export class TenantsService {
@@ -41,6 +42,7 @@ export class TenantsService {
     private readonly verificationService: VerifcationService,
     @Inject(forwardRef(() => AuthService))
     private readonly authService: AuthService,
+    private readonly cryptoService: CryptoService,
     private readonly logger: Logger,
     private readonly accountsPublisher: AccountsPublisher,
   ) {}
@@ -49,98 +51,114 @@ export class TenantsService {
     return this.database.getClient();
   }
 
-  findAll({
+  async findAll({
     username = '',
     page = 1,
     offset = 15,
     isDeleted = false,
     isActive,
     isVerified,
-  }: FindTenantsDto): Promise<Partial<Tenant>[]> {
-    const userToSkip = (page - 1) * offset;
-
+  }: FindTenantsDto) {
     const prisma = this.prisma;
+    const skip = (page - 1) * offset;
 
-    if (isDeleted) {
-      return prisma.tenant.findMany({
-        skip: userToSkip,
+    // Base where clause
+    const whereClause: any = {
+      isDeleted,
+      ...(username.trim() !== '' && {
+        username: { contains: username, mode: 'insensitive' },
+      }),
+      ...(isActive !== undefined && { isActive }),
+      ...(isVerified !== undefined && { isVerified }),
+    };
+
+    const [totalCount, tenants] = await prisma.$transaction([
+      prisma.tenant.count({ where: whereClause }),
+      prisma.tenant.findMany({
+        skip,
         take: offset,
-        where: { isDeleted },
+        where: whereClause,
         orderBy: { username: 'asc' },
         select: {
           id: true,
-          username: true,
           firstname: true,
           lastname: true,
+          username: true,
           email: true,
           role: true,
+          guardian: true,
           isActive: true,
-          // isVerified: true,
+          verificationLevel: true,
+          registrationStatus: true,
           createdAt: true,
           updatedAt: true,
         },
-      });
-    }
+      }),
+    ]);
 
-    return this.prisma.tenant.findMany({
-      skip: userToSkip,
-      take: offset,
-      where: {
-        ...(username !== undefined &&
-          username.trim() !== '' && {
-            username: { contains: username, mode: 'insensitive' },
-          }),
-        isDeleted,
-        ...(isActive !== undefined && { isActive }),
-        ...(isVerified !== undefined && { isVerified }),
-      },
-      orderBy: { username: 'asc' },
+    // Map tenants to table-ready format
+    const results = await Promise.all(
+      tenants.map(async (tenant) => {
+        const verificationDocs = await prisma.verificationDocument.findMany({
+          where: {
+            userId: tenant.id,
+            userType: 'TENANT',
+            verificationStatus: 'APPROVED',
+            isDeleted: false,
+          },
+        });
+
+        return {
+          ...tenant,
+          fullname: `${tenant.firstname ?? ''} ${tenant.lastname ?? ''}`.trim(),
+          hasPermits: verificationDocs.length > 0,
+        };
+      }),
+    );
+
+    return Array.isArray(results) ? results : [results];
+  }
+
+  async findOne(id: number) {
+    if (!id) throw new BadRequestException('Tenant ID is required');
+
+    const prisma = this.prisma;
+    const tenant = await prisma.tenant.findUnique({
+      where: { id },
       select: {
         id: true,
-        username: true,
         firstname: true,
         lastname: true,
+        username: true,
         email: true,
         role: true,
+        guardian: true,
         isActive: true,
-        // isVerified: true,
+        verificationLevel: true,
+        registrationStatus: true,
         createdAt: true,
         updatedAt: true,
       },
     });
-  }
 
-  findOne(id: number) {
-    const prisma = this.prisma;
+    if (!tenant) throw new NotFoundException(`Tenant with ID ${id} not found`);
 
-    //! no account
-    if (!id) {
-      throw new BadRequestException('Id is required');
-    }
-
-    return prisma.tenant.findUnique({
-      where: {
-        isDeleted: false,
-        id: id,
-      },
+    const verificationDocs = await prisma.verificationDocument.findMany({
+      where: { userId: id, userType: 'TENANT', isDeleted: false },
     });
-  }
 
-  findByUsername(username: string) {
-    const prisma = this.prisma;
-    if (!username) {
-      throw new BadRequestException('Username is required');
-    }
-    return prisma.tenant.findUnique({
-      where: {
-        username: username,
-      },
-    });
+    return {
+      ...tenant,
+      fullname: `${tenant.firstname ?? ''} ${tenant.lastname ?? ''}`.trim(),
+      hasPermits: verificationDocs.some(
+        (v) => v.verificationStatus === 'APPROVED',
+      ),
+      verificationDocuments: verificationDocs,
+    };
   }
 
   findUserById(userId: number) {
     const prisma = this.prisma;
-
     if (!userId) {
       throw new BadRequestException('Id is required');
     }
@@ -151,10 +169,25 @@ export class TenantsService {
     });
   }
 
+  findUserByUsername(username: string) {
+    const prisma = this.prisma;
+
+    if (!username) {
+      throw new BadRequestException('Username is required');
+    }
+    return prisma.tenant.findUnique({
+      where: {
+        username: username,
+      },
+    });
+  }
+
   async create(dto: CreateTenantDto) {
     try {
       const prisma = this.prisma;
-      // const hashedPassword = await bcrypt.hash(dto.password, 10);
+      const hashedPassword = await this.cryptoService.hashPassword(
+        dto.password,
+      );
 
       const created = await prisma.tenant.create({
         data: {
@@ -162,7 +195,7 @@ export class TenantsService {
           firstname: dto.firstname,
           lastname: dto.lastname,
           email: dto.email,
-          password: dto.password,
+          password: hashedPassword,
           age: dto.age,
           guardian: dto.guardian,
           address: dto.address,

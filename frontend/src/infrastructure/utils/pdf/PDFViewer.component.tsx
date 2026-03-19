@@ -1,218 +1,179 @@
-import { Document, Page } from 'react-pdf';
-import { Box, Spinner, Center, useColorMode } from '@chakra-ui/react';
-import { useEffect, useState } from 'react';
-import styled from '@emotion/styled';
-import { Colors } from '@/pages/constants';
-import { useBreakpointValue } from '@chakra-ui/react';
+import React, { useEffect, useState } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
+// import workerSrc from 'pdfjs-dist/build/pdf.worker.min?url';
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min?url';
+
+pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+// pdfjs.GlobalWorkerOptions.workerSrc = pdfWorker;
+// pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+
 import {
+  Box,
+  CircularProgress,
   Button,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalCloseButton,
-  ModalBody,
-} from '@chakra-ui/react';
+  Dialog,
+  IconButton,
+  useTheme,
+  useMediaQuery,
+} from '@mui/material';
+import {
+  Fullscreen as FullscreenIcon,
+  Close as CloseIcon,
+} from '@mui/icons-material';
 
 type PdfViewerProps = {
   url: string;
   width?: number | string;
   height?: number | string;
-  pageNumber?: number;
-  scale?: number;
 };
 
 export function PdfViewer({
   url,
   width = '100%',
   height = '600px',
-  pageNumber = 1,
-  scale = 1.0,
 }: PdfViewerProps) {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [numPages, setNumPages] = useState(0);
   const [fileData, setFileData] = useState<Blob | null>(null);
   const [loading, setLoading] = useState(true);
-  const [renderPdf, setRenderPdf] = useState(false);
-  const { colorMode } = useColorMode();
   const [fullscreen, setFullscreen] = useState(false);
-
-  const responsiveScale =
-    useBreakpointValue({
-      base: 0.5, // Mobile: pages take ~50% of screen width
-      sm: 0.7, // Small tablets
-      md: 0.9, // Medium tablets
-      lg: 1.0, // Desktop
-      xl: 1.2, // Large desktop
-    }) || scale;
 
   useEffect(() => {
     const fetchPdf = async () => {
+      if (!url) {
+        console.warn('PDF Viewer: url is null or undefined');
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
+        // Clean URL logic from your original code
         const stripped = url.split('/media')[1];
-        // console.log('stripped', stripped);
         const res = await fetch('/media' + stripped, {
           credentials: 'include',
         });
-        if (!res.ok) throw new Error('Failed to fetch PDF');
+        if (!res.ok) throw new Error('Failed to fetch');
         const blob = await res.blob();
         setFileData(blob);
       } catch (err) {
-        console.error('Failed to fetch PDF:', err);
-        setFileData(null);
+        console.error('PDF Load Error:', err);
       } finally {
         setLoading(false);
       }
     };
-
     fetchPdf();
   }, [url]);
 
-  useEffect(() => {
-    setRenderPdf(false);
-    const id = setTimeout(() => setRenderPdf(true), 50); // wait 50ms for cleanup
-    return () => clearTimeout(id);
-  }, [fileData]);
-
-  if (loading) {
+  if (loading)
     return (
-      <Center width={width} height={height}>
-        <Spinner size="xl" />
-      </Center>
-    );
-  }
-
-  if (!fileData) {
-    return (
-      <Box width={width} height={height}>
-        Failed to load PDF
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          height,
+          width,
+        }}
+      >
+        <CircularProgress size={40} />
       </Box>
     );
-  }
 
   return (
-    <>
-      <View w={width} h={height} colorMode={colorMode}>
-        <Button
-          size="sm"
-          onClick={() => setFullscreen(true)}
-          className="fullscreen-button"
-        >
-          Open Fullscreen
-        </Button>
-        {/* Inline preview */}
-        {renderPdf && (
+    <Box
+      sx={{
+        width,
+        height,
+        position: 'relative',
+        bgcolor: 'background.default',
+      }}
+    >
+      <Button
+        variant="contained"
+        size="small"
+        startIcon={<FullscreenIcon />}
+        onClick={() => setFullscreen(true)}
+        sx={{
+          position: 'absolute',
+          top: 8,
+          right: 8,
+          zIndex: 5,
+          borderRadius: '100px',
+          bgcolor: 'rgba(255,255,255,0.8)',
+          color: 'black',
+          backdropFilter: 'blur(4px)',
+          '&:hover': { bgcolor: 'white' },
+        }}
+      >
+        Expand
+      </Button>
+
+      <Box
+        sx={{
+          height: '100%',
+          overflowY: 'auto',
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        {fileData ? (
           <Document
-            key={url}
             file={fileData}
             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
+            onLoadError={(err) =>
+              console.error('PDF Document Load Error:', err)
+            }
           >
-            {Array.from({ length: numPages }, (_, index) => (
+            {Array.from({ length: numPages }, (_, i) => (
               <Page
-                key={`page_${index + 1}`}
-                pageNumber={index + 1}
-                scale={responsiveScale}
+                key={i}
+                pageNumber={i + 1}
+                width={isMobile ? 300 : 500}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
               />
             ))}
           </Document>
+        ) : (
+          <Box sx={{ textAlign: 'center', mt: 2 }}>No PDF available</Box>
         )}
-      </View>
+      </Box>
 
-      {/* Fullscreen modal with iframe */}
-      <Modal
-        isOpen={fullscreen}
-        onClose={() => setFullscreen(false)}
-        size="full"
-        isCentered
-      >
-        <ModalOverlay />
-        <ModalContent
-          maxW="100%"
-          maxH="100%"
-          h="100vh"
-          overflow="hidden"
-          padding={'2rem'}
-          backgroundColor={
-            colorMode === 'light'
-              ? Colors.PrimaryLight[4]
-              : Colors.PrimaryLight[10]
-          }
+      {/* Fullscreen Dialog */}
+      <Dialog fullScreen open={fullscreen} onClose={() => setFullscreen(false)}>
+        <Box
+          sx={{
+            height: '100vh',
+            display: 'flex',
+            flexDirection: 'column',
+            bgcolor: '#525659',
+          }}
         >
-          <ModalCloseButton />
-          <ModalBody>
-            <PDFIframe className="iframe" src={url} title="PDF Fullscreen" />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    </>
+          <Box
+            sx={{
+              p: 1,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              bgcolor: 'rgba(0,0,0,0.5)',
+            }}
+          >
+            <IconButton
+              onClick={() => setFullscreen(false)}
+              sx={{ color: 'white' }}
+            >
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <iframe
+            src={url}
+            title="PDF Fullscreen"
+            style={{ width: '100%', height: '100%', border: 'none' }}
+          />
+        </Box>
+      </Dialog>
+    </Box>
   );
 }
-
-const View = styled.div<{
-  w?: string | number;
-  h?: string | number;
-  colorMode: 'light' | 'dark';
-}>`
-  width: ${({ w }) => w || '100%'};
-  height: ${({ h }) => h || '200px'};
-  position: relative;
-
-  > .react-pdf__Document {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    > .react-pdf__Page {
-      background-color: transparent !important;
-    }
-  }
-  scrollbar-width: none;
-
-  .fullscreen-button {
-    background-color: ${({ colorMode }) =>
-      colorMode === 'light'
-        ? Colors.PrimaryLight[4]
-        : Colors.PrimaryLight[6]} !important;
-    position: fixed;
-    top: 0;
-    right: 0;
-    margin: 1rem;
-    z-index: 10;
-  }
-
-  @media (max-width: 480px) {
-    /* Small phones */
-    min-width: 100%;
-    max-width: 100%;
-    border-radius: 0.5rem;
-    .pdf-viewer-container {
-      padding: 0.25rem;
-    }
-  }
-
-  /* Target canvas inside Page */
-  canvas {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-    border-radius: 4px;
-    margin: 0 auto;
-  }
-
-  /* Text / annotation layers */
-  .react-pdf__Page__textContent,
-  .react-pdf__Page__annotations {
-    pointer-events: none;
-  }
-`;
-
-const PDFIframe = styled.iframe`
-  border: none;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 90%;
-  height: 90%;
-  /* padding: 4rem; */
-
-  > * {
-    border: 3px solid yellow;
-  }
-`;

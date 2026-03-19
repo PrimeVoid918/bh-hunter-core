@@ -1,6 +1,22 @@
-import React from 'react';
-import { Flex, Box, Text, Button } from '@chakra-ui/react';
-import styled from '@emotion/styled';
+import React, { useState } from 'react';
+import {
+  Box,
+  Typography,
+  Button,
+  Stack,
+  Divider,
+  TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  useTheme,
+} from '@mui/material';
+import {
+  CheckCircle as ApproveIcon,
+  Cancel as RejectIcon,
+  DeleteForever as DeleteIcon,
+} from '@mui/icons-material';
 import { PdfViewer } from '@/infrastructure/utils/pdf/PDFViewer.component';
 import { ImageViewer } from '@/infrastructure/utils/media/ImageViewer.component';
 import { parseIsoDate } from '@/infrastructure/utils/parseISODate.util';
@@ -10,7 +26,6 @@ import {
   UserRoleType,
 } from '@/infrastructure/documents/documents.type';
 import { useGetOneQuery } from '@/infrastructure/valid-docs/valid-docs.redux.api';
-import DialogWrapper from '../../components/dialog-wrapper/DialogWrapper';
 
 interface ValidationInfoInterface {
   thisTableIsFor: string;
@@ -18,6 +33,7 @@ interface ValidationInfoInterface {
   onApprove: (row: VerificationDocumentMetaData) => void;
   onReject: (row: VerificationDocumentMetaData, rejectReason: string) => void;
   onDelete: (row: VerificationDocumentMetaData) => void;
+  onCloseParent?: () => void; // Added callback to close the main modal
 }
 
 export default function ValidationInfo({
@@ -26,7 +42,9 @@ export default function ValidationInfo({
   onApprove,
   onReject,
   onDelete,
+  onCloseParent,
 }: ValidationInfoInterface) {
+  const theme = useTheme();
   const {
     data: permitData,
     isLoading,
@@ -37,86 +55,130 @@ export default function ValidationInfo({
     documentId: permitId,
   });
 
-  const permitDateObject = parseIsoDate(permitData?.createdAt);
-
-  const [actionModalOpen, setActionModalOpen] = React.useState(false);
-  const [selectedAction, setSelectedAction] = React.useState<
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [selectedAction, setSelectedAction] = useState<
     'APPROVE' | 'REJECT' | 'DELETE' | null
   >(null);
-  const [rejectReason, setRejectReason] = React.useState<string>('');
+  const [rejectReason, setRejectReason] = useState('');
+
+  const permitDate = parseIsoDate(permitData?.createdAt);
+
+  const handleExecuteAction = () => {
+    if (!permitData || !selectedAction) return;
+
+    if (selectedAction === 'APPROVE') onApprove(permitData);
+    else if (selectedAction === 'REJECT') onReject(permitData, rejectReason);
+    else if (selectedAction === 'DELETE') onDelete(permitData);
+
+    setConfirmOpen(false);
+    onCloseParent?.(); // Close the detail view after action
+  };
 
   return (
-    <AsyncState
-      isLoading={isLoading}
-      isError={isError}
-      errorObject={error}
-      errorBody={(err) => (
-        <Box color="gray.500">
-          ❓ Unexpected error
-          <pre>{JSON.stringify(err, null, 2)}</pre>
-        </Box>
-      )}
-    >
+    <AsyncState isLoading={isLoading} isError={isError} error={error}>
       {permitData && (
-        <BodyContainer>
-          {/* Viewer */}
+        <Stack
+          direction={{ xs: 'column', md: 'row' }}
+          sx={{ height: '80vh', minHeight: 600 }}
+        >
+          {/* LEFT SIDE: DOCUMENT VIEWER */}
           <Box
-            flex="2"
-            bg="gray.50"
-            overflowY="scroll"
-            className="pdf-viewer-container"
+            sx={{
+              flex: 2,
+              bgcolor: 'background.default',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              p: 1,
+            }}
           >
-            {permitData.fileFormat === 'PDF' ? (
-              <PdfViewer url={permitData.url} />
-            ) : (
-              <ImageViewer url={permitData.url} />
-            )}
+            <Box
+              sx={{
+                flex: 1,
+                borderRadius: 2,
+                overflowY: 'auto',
+                border: '1px solid',
+                // borderColor: 'outlineVariant',
+                bgcolor: '#f0f0f0', // Neutral ground for documents
+                '&::-webkit-scrollbar': { display: 'none' },
+              }}
+            >
+              {permitData.fileFormat === 'PDF' ? (
+                <PdfViewer url={permitData.url} />
+              ) : (
+                <ImageViewer url={permitData.url} />
+              )}
+            </Box>
           </Box>
 
-          {/* Info Panel */}
-          <Box
-            flex="1"
-            borderLeft="1px solid"
-            borderColor="gray.200"
-            minHeight={0}
+          {/* RIGHT SIDE: INFO & ACTIONS */}
+          <Stack
+            sx={{
+              flex: 1,
+              // borderLeft: '1px solid',
+              // borderColor: 'outlineVariant',
+              bgcolor: 'background.paper',
+            }}
           >
-            <Flex direction="column" height="100%">
-              <Box flex="1" p={4} overflowY="auto" minHeight={0}>
-                <Text fontWeight="bold">Permit Info</Text>
-                <Text>ID: {permitData.id}</Text>
-                <Text>
-                  Owner: {permitData.user.firstname} {permitData.user.lastname}
-                </Text>
-                <Text>Status: {permitData.verificationStatus}</Text>
-                <Text>Created At: {permitDateObject?.dateOnly.toString()}</Text>
-              </Box>
-
-              <Box
-                p={4}
-                borderTop="1px solid"
-                borderColor="gray.200"
-                display="flex"
-                gap={2}
-                justifyContent="flex-end"
-                flexShrink={0}
+            <Box sx={{ p: 3, flex: 1, overflowY: 'auto' }}>
+              <Typography
+                variant="overline"
+                color="text.secondary"
+                fontWeight={700}
               >
-                {permitData.verificationStatus == 'PENDING' ? (
+                Document Details
+              </Typography>
+              <Typography variant="h6" fontWeight={800} gutterBottom>
+                {permitData.verificationType.replace('_', ' ')}
+              </Typography>
+
+              <Divider sx={{ my: 2 }} />
+
+              <Stack spacing={2}>
+                <InfoRow
+                  label="Owner"
+                  value={`${permitData.user.firstname} ${permitData.user.lastname}`}
+                />
+                <InfoRow label="Status" value={permitData.verificationStatus} />
+                <InfoRow
+                  label="Submitted"
+                  value={permitDate?.dateOnly ?? '—'}
+                />
+                <InfoRow label="Doc ID" value={`#${permitData.id}`} />
+              </Stack>
+            </Box>
+
+            {/* ACTION FOOTER */}
+            <Box
+              sx={{
+                p: 2,
+                borderColor: 'outlineVariant',
+                bgcolor: 'background.default',
+              }}
+            >
+              <Stack direction="row" spacing={1}>
+                {permitData.verificationStatus === 'PENDING' ? (
                   <>
-                    {' '}
                     <Button
-                      colorScheme="green"
+                      fullWidth
+                      variant="contained"
+                      color="success"
+                      startIcon={<ApproveIcon />}
                       onClick={() => {
                         setSelectedAction('APPROVE');
-                        setActionModalOpen(true);
+                        setConfirmOpen(true);
                       }}
                     >
                       Approve
                     </Button>
                     <Button
-                      colorScheme="red"
+                      fullWidth
+                      variant="outlined"
+                      color="error"
+                      startIcon={<RejectIcon />}
                       onClick={() => {
                         setSelectedAction('REJECT');
-                        setActionModalOpen(true);
+                        setConfirmOpen(true);
                       }}
                     >
                       Reject
@@ -124,118 +186,85 @@ export default function ValidationInfo({
                   </>
                 ) : (
                   <Button
-                    colorScheme="green"
+                    fullWidth
+                    variant="outlined"
+                    color="error"
+                    startIcon={<DeleteIcon />}
                     onClick={() => {
                       setSelectedAction('DELETE');
-                      setActionModalOpen(true);
+                      setConfirmOpen(true);
                     }}
                   >
-                    Delete
+                    Delete Record
                   </Button>
                 )}
-              </Box>
-            </Flex>
-          </Box>
-          <DialogWrapper
-            isOpen={actionModalOpen}
-            onClose={() => setActionModalOpen(false)}
-            header={
-              selectedAction === 'DELETE'
-                ? 'Confirm Deletion'
-                : selectedAction === 'APPROVE'
-                  ? 'Confirm Approval'
-                  : 'Confirm Rejection'
-            }
-            footer={
-              <Flex justify="flex-end" gap={2} w="100%">
-                <Button onClick={() => setActionModalOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  colorScheme={selectedAction === 'APPROVE' ? 'green' : 'red'}
-                  onClick={() => {
-                    if (!permitData) return;
-
-                    if (selectedAction === 'APPROVE') {
-                      onApprove(permitData);
-                    } else if (selectedAction === 'REJECT') {
-                      onReject({ ...permitData }, rejectReason);
-                    } else if (selectedAction === 'DELETE') {
-                      onDelete({ ...permitData });
-                    }
-
-                    setActionModalOpen(false);
-                    setRejectReason('');
-                    setSelectedAction(null);
-                  }}
-                >
-                  {selectedAction === 'DELETE'
-                    ? 'Deletion'
-                    : selectedAction === 'APPROVE'
-                      ? 'Approval'
-                      : 'Rejection'}
-                </Button>
-              </Flex>
-            }
-          >
-            <Box p={4}>
-              Are you sure you want to{' '}
-              {selectedAction === 'DELETE'
-                ? 'deletion'
-                : selectedAction === 'APPROVE'
-                  ? 'approval'
-                  : 'rejection'}{' '}
-              {permitData?.verificationType} for {permitData?.user.firstname}{' '}
-              {permitData?.user.lastname}?
-              {selectedAction === 'REJECT' && (
-                <Box mt={4}>
-                  <Text mb={1}>Reject Reason (optional)</Text>
-                  <textarea
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    style={{
-                      width: '100%',
-                      minHeight: '80px',
-                      borderRadius: '0.25rem',
-                      padding: '0.5rem',
-                      borderColor: '#ccc',
-                    }}
-                  />
-                </Box>
-              )}
+              </Stack>
             </Box>
-          </DialogWrapper>
-        </BodyContainer>
+          </Stack>
+
+          {/* CONFIRMATION DIALOG */}
+          <Dialog
+            open={confirmOpen}
+            onClose={() => setConfirmOpen(false)}
+            PaperProps={{ sx: { borderRadius: 3, p: 1, maxWidth: 400 } }}
+          >
+            <DialogTitle sx={{ fontWeight: 800 }}>
+              Confirm {selectedAction?.toLowerCase()}?
+            </DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="text.secondary">
+                Are you sure you want to {selectedAction?.toLowerCase()} the{' '}
+                {permitData.verificationType} for {permitData.user.firstname}?
+              </Typography>
+              {selectedAction === 'REJECT' && (
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label="Reason for rejection"
+                  variant="outlined"
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  sx={{ mt: 3 }}
+                />
+              )}
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+              <Button
+                onClick={() => setConfirmOpen(false)}
+                sx={{ color: 'text.secondary' }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                color={selectedAction === 'APPROVE' ? 'success' : 'error'}
+                onClick={handleExecuteAction}
+              >
+                Confirm
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </Stack>
       )}
     </AsyncState>
   );
 }
 
-const BodyContainer = styled(Flex)`
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  min-height: 0;
-
-  > :nth-of-type(1) {
-    flex: 2;
-    min-height: 0;
-  }
-  > :nth-of-type(2) {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .pdf-viewer-container {
-    padding: 1rem;
-    background-color: transparent !important;
-
-    &::-webkit-scrollbar {
-      display: none !important;
-      scrollbar-width: none !important;
-      -ms-overflow-style: none !important;
-    }
-  }
-`;
+// Small helper component for the list items
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <Box>
+      <Typography
+        variant="caption"
+        color="text.secondary"
+        sx={{ fontWeight: 600, display: 'block' }}
+      >
+        {label}
+      </Typography>
+      <Typography variant="body2" fontWeight={500}>
+        {value}
+      </Typography>
+    </Box>
+  );
+}

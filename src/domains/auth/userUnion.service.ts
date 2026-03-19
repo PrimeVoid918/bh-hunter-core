@@ -20,7 +20,7 @@ export class UserUnionService {
     const owner = await this.ownerService.findUserByUsername(username);
     if (owner) return { type: 'owner', user: owner };
 
-    const tenant = await this.tenantService.findByUsername(username);
+    const tenant = await this.tenantService.findUserByUsername(username);
     if (tenant) return { type: 'tenant', user: tenant };
 
     return null;

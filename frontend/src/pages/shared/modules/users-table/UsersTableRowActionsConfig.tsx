@@ -1,3 +1,4 @@
+// UsersTableRowActionsConfig.tsx
 import React, { useState } from 'react';
 import {
   Button,
@@ -11,30 +12,26 @@ import {
   Close as CloseIcon,
   Visibility as ViewIcon,
 } from '@mui/icons-material';
-import { VerificationDocumentMetaData } from '@/infrastructure/documents/documents.type';
-import ValidationInfo from './ValidationInfo';
+import UserTableInfo from './UserTableInfo';
+import { UserTableRow } from './UsersTable';
 
-// Note: ModalWrapper is replaced by MUI's Dialog for a more native M3 feel
 interface Props {
-  rowData: VerificationDocumentMetaData;
-  thisTableIsFor: string;
-  onApprove: (row: VerificationDocumentMetaData) => void;
-  onReject: (row: VerificationDocumentMetaData, rejectReason: string) => void;
-  onDelete: (row: VerificationDocumentMetaData) => void;
+  rowData: UserTableRow;
+  thisTableIsFor: 'OWNER' | 'TENANT';
+  onSuspend: (row: UserTableRow) => void;
+  onDelete: (row: UserTableRow) => void;
 }
 
-export default function ValidationTableRowActionsConfig({
+export default function UsersTableRowActionsConfig({
   rowData,
   thisTableIsFor,
-  onApprove,
-  onReject,
+  onSuspend,
   onDelete,
 }: Props) {
   const theme = useTheme();
 
-  // Replaces Chakra's useDisclosure
+  // Dialog open state
   const [open, setOpen] = useState(false);
-
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
 
@@ -46,7 +43,7 @@ export default function ValidationTableRowActionsConfig({
         onClick={handleOpen}
         startIcon={<ViewIcon sx={{ fontSize: 16 }} />}
         sx={{
-          borderRadius: '100px', // M3 Pill
+          borderRadius: '100px',
           fontWeight: 600,
           textTransform: 'none',
           fontSize: '0.75rem',
@@ -54,7 +51,7 @@ export default function ValidationTableRowActionsConfig({
           borderColor: 'outlineVariant',
           color: 'text.primary',
           '&:hover': {
-            bgcolor: 'primaryContainer', // Using your anchor's token
+            bgcolor: 'primaryContainer',
             borderColor: 'primary.main',
           },
         }}
@@ -70,15 +67,15 @@ export default function ValidationTableRowActionsConfig({
         scroll="paper"
         PaperProps={{
           sx: {
-            borderRadius: '16px', // M3 Large Radius
+            borderRadius: '16px',
             border: '1px solid',
             borderColor: 'outlineVariant',
-            boxShadow: 'none', // Strict Minimalism per Anchor
-            backgroundImage: 'none', // Prevents dark mode grey overlays
+            boxShadow: 'none',
+            backgroundImage: 'none',
           },
         }}
       >
-        {/* Sleek Close Button */}
+        {/* Close Button */}
         <Box sx={{ position: 'absolute', right: 12, top: 12, zIndex: 10 }}>
           <IconButton
             onClick={handleClose}
@@ -95,16 +92,11 @@ export default function ValidationTableRowActionsConfig({
         </Box>
 
         <DialogContent sx={{ p: 0 }}>
-          {/* ValidationInfo is the layer that handles the images/PDFs 
-              and the actual Approve/Reject logic 
-          */}
-          <ValidationInfo
-            onApprove={onApprove}
-            onReject={onReject}
-            onDelete={onDelete}
-            permitId={rowData.id}
+          <UserTableInfo
+            rowData={rowData}
             thisTableIsFor={thisTableIsFor}
-            // Optional: Close the modal if an action succeeds
+            onSuspend={onSuspend}
+            onDelete={onDelete}
             onCloseParent={handleClose}
           />
         </DialogContent>

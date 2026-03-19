@@ -1,44 +1,99 @@
-// owner.types.ts
 import { z } from 'zod';
 import { BaseUserSchema } from '../user/user.types';
-// import { BoardingHousesIdList } from '../boarding-houses/boarding-house.types';
-// import { PermitMetaData } from '../valid-docs/permits.types';
-// import { PermitMetaData } from '@/infrastructure/permits/permits.types';
-import { VerificationDocumentMetaData } from '../../../../dist/domains/verifications/types/permit.types';
-// import PermitMeta
 
-// Base schema
-export const OwnerSchema = BaseUserSchema.extend({
-  role: z.literal('OWNER').optional(),
-  permits: z.array(z.custom<VerificationDocumentMetaData>()).optional(),
+const BoardingHouseSchema = z.object({
+  id: z.number(),
 });
-export type Owner = z.infer<typeof OwnerSchema>;
 
-// For create
-export const CreateOwnerSchema = OwnerSchema.omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
+const SubscriptionSchema = z.object({
+  id: z.number(),
+  type: z.enum(['TRIAL', 'PAID']),
+  startedAt: z.coerce.date(),
+  expiresAt: z.coerce.date(),
+  provider: z.string().nullable(),
+});
+
+const VerificationDocumentSchema = z.object({
+  id: z.number(),
+  userType: z.string(),
+  userId: z.number(),
+  fileFormat: z.string(),
+  verificationType: z.string(),
+  url: z.string(),
+  expiresAt: z.coerce.date(),
+  verificationStatus: z.string(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export const FindAllOwnersSchema = z.array(
+  BaseUserSchema.extend({
+    role: z.literal('OWNER'),
+
+    fullname: z.string(),
+
+    verificationLevel: z.enum(['UNVERIFIED', 'PROFILE_ONLY', 'FULLY_VERIFIED']),
+    registrationStatus: z.enum(['PENDING', 'COMPLETED']),
+    verified: z.boolean(),
+
+    hasPermits: z.boolean(),
+
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
+
+    subscription: SubscriptionSchema.nullable().optional(),
+  }),
+);
+
+export type FindAllOwners = z.infer<typeof FindAllOwnersSchema>;
+
+export const FindOneOwnerSchema = BaseUserSchema.extend({
+  role: z.literal('OWNER'),
+
+  fullname: z.string(),
+
+  verificationLevel: z.enum(['UNVERIFIED', 'PROFILE_ONLY', 'FULLY_VERIFIED']),
+  registrationStatus: z.enum(['PENDING', 'COMPLETED']),
+  verified: z.boolean(),
+
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+
+  age: z.number().nullable().optional(),
+  address: z.string().nullable().optional(),
+  phone_number: z.string().nullable().optional(),
+
+  consentAcceptedAt: z.coerce.date().nullable().optional(),
+  hasAcceptedLegitimacyConsent: z.boolean(),
+
+  boardingHouses: z.array(BoardingHouseSchema),
+
+  subscription: SubscriptionSchema.nullable().optional(),
+
+  verificationDocuments: z.array(VerificationDocumentSchema),
+});
+
+export type FindOneOwner = z.infer<typeof FindOneOwnerSchema>;
+
+export const CreateOwnerSchema = z.object({
+  username: z.string(),
+  firstname: z.string().optional(),
+  lastname: z.string().optional(),
+  email: z.string().email(),
+  password: z.string(),
+
+  age: z.number().optional(),
+  address: z.string().optional(),
+  phone_number: z.string().optional(),
 });
 export type CreateOwner = z.infer<typeof CreateOwnerSchema>;
 
-// For update (all fields optional)
 export const UpdateOwnerSchema = CreateOwnerSchema.partial();
 export type UpdateOwner = z.infer<typeof UpdateOwnerSchema>;
 
-// For fetching/reading (id + fullname + timestamps enforced)
-export const GetOwnerSchema = OwnerSchema.extend({
-  id: z.number(),
-  fullname: z.string(),
-  createdAt: z.date(),
-  updatedAt: z.date(),
-});
-export type GetOwner = z.infer<typeof GetOwnerSchema>;
-
-// State
 export interface OwnerState {
-  selectedUser: Owner | null;
-  filter: string | null;
+  list: FindAllOwners;
+  selectedUser: FindOneOwner | null;
   loading: boolean;
   error: string | null;
 }

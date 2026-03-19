@@ -5,7 +5,9 @@ import {
 } from '@/infrastructure/documents/documents.type';
 import { TableConfig } from '../../components/data-table/types';
 import { createFilterElement } from '@/pages/shared/components/data-table/services';
+import { parseIsoDate } from '@/infrastructure/utils/parseISODate.util'; // Updated path
 import ValidationTableRowActionsConfig from './ValidationTableRowActionsConfig';
+import { Chip, Typography } from '@mui/material';
 
 export const createValidationTableConfig = (actions: {
   thisTableIsFor: string;
@@ -13,36 +15,25 @@ export const createValidationTableConfig = (actions: {
   onReject: (row: VerificationDocumentMetaData, rejectReason: string) => void;
   onDelete: (row: VerificationDocumentMetaData) => void;
 }): TableConfig<VerificationDocumentMetaData>[] => [
-  // {
-  //   columnName: 'Firstname',
-  //   field: 'user.firstname',
-  //   filterType: 'input',
-  // },
-  // {
-  //   columnName: 'Lastname',
-  //   field: 'user.lastname',
-  //   filterType: 'input',
-  // },
   {
     columnName: 'Full Name',
-    field: 'fullName', // Virtual field
+    field: 'fullName',
     filterType: 'input',
-    // Search will look through this combined string:
     resolveValue: (row) => `${row.user.firstname} ${row.user.lastname}`,
   },
   {
     columnName: 'Email',
-    field: 'user.email', // Automatic dot-notation resolution
+    field: 'user.email',
     filterType: 'input',
   },
   {
-    columnName: 'Permit Type',
+    columnName: 'Type',
     field: 'verificationType',
     filterType: 'dropdown',
     filterElement: createFilterElement<VerificationType>(
       'dropdown',
       ['DTI', 'SEC', 'FIRE_CERTIFICATE'],
-      'Search by type',
+      'Type',
     ),
   },
   {
@@ -52,13 +43,52 @@ export const createValidationTableConfig = (actions: {
     filterElement: createFilterElement<VerificationStatus>(
       'dropdown',
       ['APPROVED', 'PENDING', 'REJECTED', 'EXPIRED'],
-      'Search by status',
+      'Status',
     ),
+    body: (row: VerificationDocumentMetaData) => {
+      const status = row.verificationStatus;
+      const colorMap: Record<
+        string,
+        'success' | 'warning' | 'error' | 'default'
+      > = {
+        APPROVED: 'success',
+        PENDING: 'warning',
+        REJECTED: 'error',
+        EXPIRED: 'default',
+      };
+
+      return (
+        <Chip
+          label={status}
+          size="small"
+          color={colorMap[status] || 'default'}
+          variant="outlined"
+          sx={{
+            fontWeight: 700,
+            fontSize: '0.65rem',
+            borderRadius: '6px',
+            // Ensure contrast in both light/dark mode
+            borderWidth: '1.5px',
+          }}
+        />
+      );
+    },
   },
   {
-    columnName: 'Date Created',
+    columnName: 'Submitted',
     field: 'createdAt',
-    filterType: 'date',
+    filterType: 'input',
+    body: (row: VerificationDocumentMetaData) => {
+      const parsed = parseIsoDate(row.createdAt);
+      return (
+        <Typography
+          variant="body2"
+          sx={{ fontSize: '0.85rem', color: 'text.secondary' }}
+        >
+          {parsed?.dateOnly ?? 'Invalid Date'}
+        </Typography>
+      );
+    },
   },
   {
     columnName: 'Actions',

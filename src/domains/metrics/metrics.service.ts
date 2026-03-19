@@ -212,8 +212,7 @@ export class MetricsService {
       baseWhere.createdAt = { gte: subDays(new Date(), 30) };
 
     // User filter
-    if (userId) baseWhere.userId = userId;
-    if (role) baseWhere.userType = role === 'OWNER' ? 'OWNER' : 'TENANT';
+    if (userId) baseWhere.ownerId = userId;
 
     const [totalSubscriptions, activeSubscriptions, inactiveSubscriptions] =
       await Promise.all([

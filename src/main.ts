@@ -37,6 +37,16 @@ async function bootstrap() {
 
   server.use(express.json());
 
+  server.use('/media', (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'http://localhost:5173'); // or '*'
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
+    res.header(
+      'Access-Control-Allow-Headers',
+      'Origin, X-Requested-With, Content-Type, Accept',
+    );
+    next();
+  });
+
   // Static file serving
   server.use(express.static(publicPath));
   server.use(
@@ -72,11 +82,13 @@ async function bootstrap() {
   );
 
   await generateDiagram();
+  const port = 3000;
+  const localIp: string = ip.address();
 
   // CORS
   app.enableCors({
     origin: [
-      'http://10.122.68.117:5173',
+      `http://${localIp}:${port}`,
       process.env.NODE_ENV !== 'production'
         ? 'http://localhost:5173'
         : 'https://bhhph.online',
@@ -94,8 +106,6 @@ async function bootstrap() {
     }
   });
 
-  const port = 3000;
-  const localIp: string = ip.address();
   console.log(`🚀 Server running at http://${localIp}:${port}`);
 
   await app.listen(port, '0.0.0.0');

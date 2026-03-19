@@ -1,4 +1,4 @@
-import OwnersInfoScreen from '../screens/owners.info.screen';
+import OwnersTableMainScreen from '../owners-table.main.screen';
 import OwnersMainScreen from '../screens/main.screen/owners.main.screen';
 import OwnersLayout from './owners.layout';
 
@@ -8,8 +8,8 @@ export default function OwnersUsersNavigator() {
     element: <OwnersLayout />,
     children: [
       //* registering navigators
-      { index: true, element: <OwnersMainScreen /> }, //* default screen
-      { path: ':id/permits', element: <OwnersInfoScreen /> },
+      // { index: true, element: <OwnersMainScreen /> }, //* default screen
+      { index: true, element: <OwnersTableMainScreen /> }, //* default screen
     ],
   };
 }

@@ -1,35 +1,59 @@
-import React from 'react';
-import styled from '@emotion/styled';
-import { Box, Button, useColorMode, useToast } from '@chakra-ui/react';
-import BaseWrapper from '@/pages/shared/layouts/wrappers/base-wrapper';
+import React, { useState } from 'react';
+import {
+  Box,
+  Typography,
+  Breadcrumbs,
+  Link,
+  Snackbar,
+  Alert,
+  Stack,
+} from '@mui/material';
+import { useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+
 import AsyncState from '@/pages/shared/components/async-state/AsyncState';
 import ValidationTable from '@/pages/shared/modules/validation-table/ValidationTable';
 import {
   useGetAllQuery,
-  // usePatchVerificationDocumentMutation,
   useDeleteMutation,
   usePatchMutation,
 } from '@/infrastructure/valid-docs/valid-docs.redux.api';
 import { VerificationDocumentMetaData } from '@/infrastructure/documents/documents.type';
-import { useSelector } from 'react-redux';
 import { selectAdminId } from '@/infrastructure/auth/auth.redux.slice';
 
 export default function OwnersValidationMainScreen() {
-  const { colorMode } = useColorMode();
-  const toast = useToast();
+  const navigate = useNavigate();
+  const adminId = useSelector(selectAdminId);
   const thisTableIsFor = 'owners';
 
-  const { data, isLoading, isError, error } = useGetAllQuery('owners');
-  // const [patchDocument, patchState] = usePatchVerificationDocumentMutation();
+  // API Hooks
+  const { data, isLoading, isError, error, refetch } =
+    useGetAllQuery(thisTableIsFor);
   const [deleteDocument] = useDeleteMutation();
   const [patchDocument] = usePatchMutation();
 
-  const adminId = useSelector(selectAdminId);
+  // Notification State
+  const [toast, setToast] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
+  const showToast = (message: string, severity: typeof toast.severity) =>
+    setToast({ open: true, message, severity });
+
   if (!adminId) {
-    return 'Admin ID could not be loaded';
+    return (
+      <Alert severity="error" variant="outlined" sx={{ borderRadius: 3 }}>
+        Security Context Error: Admin ID could not be verified. Please re-login.
+      </Alert>
+    );
   }
 
-  // Handlers
   const handleApprove = async (row: VerificationDocumentMetaData) => {
     try {
       await patchDocument({
@@ -38,25 +62,11 @@ export default function OwnersValidationMainScreen() {
         payload: {
           adminId: adminId,
           verificationStatus: 'APPROVED',
-          rejectReason: undefined,
         },
       }).unwrap();
-      toast({
-        title: 'Approved',
-        description: `${row.verificationType} of ${row.user.firstname} ${row.user.lastname} has been approved.`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (e: unknown) {
-      console.log('error in approve: ', e);
-      toast({
-        title: 'Error',
-        description: `Failed to approve ${row.verificationType} of ${row.user.firstname} ${row.user.lastname}.`,
-        status: 'error',
-        duration: 4000,
-        isClosable: true,
-      });
+      showToast(`${row.verificationType} approved successfully.`, 'success');
+    } catch (e) {
+      showToast(`Failed to approve ${row.verificationType}.`, 'error');
     }
   };
 
@@ -64,7 +74,6 @@ export default function OwnersValidationMainScreen() {
     row: VerificationDocumentMetaData,
     rejectReason: string,
   ) => {
-    console.log('rejectReaon:', rejectReason);
     try {
       await patchDocument({
         id: row.id,
@@ -75,21 +84,9 @@ export default function OwnersValidationMainScreen() {
           rejectReason: rejectReason,
         },
       }).unwrap();
-      toast({
-        title: 'Rejected',
-        description: `${row.verificationType} of ${row.user.firstname} ${row.user.lastname} has been rejected.`,
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
+      showToast(`Document rejected. Reason: ${rejectReason}`, 'warning');
     } catch {
-      toast({
-        title: 'Error',
-        description: `Failed to reject ${row.verificationType} of ${row.user.firstname} ${row.user.lastname}.`,
-        status: 'error',
-        duration: 4000,
-        isClosable: true,
-      });
+      showToast(`Failed to reject document.`, 'error');
     }
   };
 
@@ -100,60 +97,53 @@ export default function OwnersValidationMainScreen() {
         sourceTarget: thisTableIsFor,
         adminId: adminId,
       }).unwrap();
-      toast({
-        title: 'Deleted',
-        description: `${row.verificationType} of ${row.user.firstname} ${row.user.lastname} has been deleted.`,
-        status: 'info',
-        duration: 3000,
-        isClosable: true,
-      });
+      showToast(`Document record deleted.`, 'info');
     } catch {
-      toast({
-        title: 'Error',
-        description: `Failed to delete ${row.verificationType} of ${row.user.firstname} ${row.user.lastname}.`,
-        status: 'error',
-        duration: 4000,
-        isClosable: true,
-      });
+      showToast(`Failed to delete record.`, 'error');
     }
   };
 
   return (
-    <ResponsiveContainer colorMode={colorMode}>
+    <Box>
+      {/* PAGE HEADER */}
+      <Stack spacing={1} mb={4}>
+        <Breadcrumbs sx={{ fontSize: '0.75rem', fontWeight: 600 }}>
+          <Link
+            underline="hover"
+            color="inherit"
+            onClick={() => navigate('/admin')}
+            sx={{ cursor: 'pointer' }}
+          >
+            Dashboard
+          </Link>
+          <Typography
+            color="text.primary"
+            sx={{ fontSize: '0.75rem', fontWeight: 700 }}
+          >
+            Validation
+          </Typography>
+          <Typography
+            color="text.primary"
+            sx={{ fontSize: '0.75rem', fontWeight: 700 }}
+          >
+            Owners
+          </Typography>
+        </Breadcrumbs>
+        <Typography variant="h4" fontWeight={800}>
+          Owner Verification
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Review legal documents, permits, and IDs submitted by boarding house
+          owners.
+        </Typography>
+      </Stack>
+
+      {/* TABLE SECTION */}
       <AsyncState
         isLoading={isLoading}
         isError={isError}
-        errorObject={error}
-        errorBody={(err, _, onClose) => {
-          if ('status' in err && typeof err.status === 'number') {
-            if (err.status >= 500) {
-              return (
-                <Box>
-                  🚨 Server error (500): something went wrong on our side.
-                </Box>
-              );
-            }
-            if (err.status >= 400) {
-              return (
-                <Box>
-                  ⚠️ Client error ({err.status}): maybe bad request or
-                  unauthorized.
-                  {onClose && (
-                    <Button mt={4} onClick={onClose}>
-                      Ok
-                    </Button>
-                  )}
-                </Box>
-              );
-            }
-          }
-          return (
-            <Box color="gray.500">
-              ❓ Unexpected error
-              <pre>{JSON.stringify(err, null, 2)}</pre>
-            </Box>
-          );
-        }}
+        error={error}
+        onRetry={refetch}
       >
         <ValidationTable
           data={data ?? []}
@@ -161,21 +151,25 @@ export default function OwnersValidationMainScreen() {
           onApprove={handleApprove}
           onReject={handleReject}
           onDelete={handleDelete}
+          onRefreshData={refetch}
         />
       </AsyncState>
 
-      {/* Example for adding more components below */}
-      <Box mt={6}>
-        {/* Future components like stats, filters, or batch actions */}
-      </Box>
-    </ResponsiveContainer>
+      {/* FEEDBACK SNACKBAR */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={4000}
+        onClose={() => setToast({ ...toast, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          severity={toast.severity}
+          variant="filled"
+          sx={{ width: '100%', borderRadius: 2 }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
+    </Box>
   );
 }
-
-const ResponsiveContainer = styled(BaseWrapper)<{ colorMode: string }>`
-  .datatable {
-    @media (max-width: 768px) {
-      overflow-x: auto;
-    }
-  }
-`;
