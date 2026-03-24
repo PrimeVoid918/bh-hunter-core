@@ -458,7 +458,7 @@ model RoomAvailabilityLog {
 model VerificationDocument {
   id                 Int                @id @default(autoincrement())
   userType           UserRole // TENANT or OWNER
-  userId             Int // points to either Tenant.id or Owner.id
+  userId             Int
   fileFormat         FileFormat         @default(PDF)
   verificationType   VerificationType
   url                String
@@ -487,7 +487,7 @@ model Image {
   type       MediaType
   quality    ImageQuality @default(MEDIUM)
   createdAt  DateTime     @default(now())
-  isDeleted  Boolean      @default(false) // For soft deletion
+  isDeleted  Boolean      @default(false)
   deletedAt  DateTime?
 
   // Polymorphic references
@@ -499,10 +499,10 @@ model AuditLog {
   id        Int         @id @default(autoincrement())
   userId    Int?
   user      Json
-  action    AuditAction // e.g. "CREATE", "UPDATE", "DELETE", "LOGIN", etc.
-  tableName String // e.g. "Tenant", "Booking"
-  recordId  Int? // The ID of the record affected, nullable in case not applicable
-  meta      Json? // Optional: store extra info (diff, payload, IP, etc.)
+  action    AuditAction
+  tableName String
+  recordId  Int?
+  meta      Json?
   createdAt DateTime    @default(now())
   isDeleted Boolean     @default(false)
   deletedAt DateTime?
@@ -562,52 +562,3 @@ model Notification {
   expiresAt DateTime?
   isDeleted Boolean             @default(false)
 }
-
-//* do this to change Json to JSONB
-/**
- * ALTER TABLE "BoardingHouse"
- * ALTER COLUMN "amenities" TYPE jsonb USING "amenities"::jsonb;
- * ALTER TABLE "BoardingHouse"
- * ALTER COLUMN "properties" TYPE jsonb USING "properties"::jsonb;
- * ALTER TABLE "Room"
- * ALTER COLUMN "features" TYPE jsonb USING "features"::jsonb;
- * ALTER TABLE "Room"
- * ALTER COLUMN "tags" TYPE jsonb USING "tags"::jsonb;
- * ALTER TABLE "AuditLog"
- * ALTER COLUMN "meta" TYPE jsonb USING "meta"::jsonb;
- * ALTER TABLE "AuditLog"
- * ALTER COLUMN "user" TYPE jsonb USING "user"::jsonb;
- * -- 🧼 Update NULLs to default values
- * UPDATE "BoardingHouse"
- * SET "amenities" = '[]'::jsonb
- * WHERE "amenities" IS NULL;
- * UPDATE "BoardingHouse"
- * UPDATE "Room"
- * SET "features" = '{}'::jsonb
- * WHERE "features" IS NULL;
- * UPDATE "Room"
- * SET "tags" = '[]'::jsonb
- * WHERE "tags" IS NULL;
- * UPDATE "AuditLog"
- * SET "meta" = '{}'::jsonb
- * WHERE "meta" IS NULL;
- * UPDATE "AuditLog"
- * SET "user" = '{}'::jsonb
- * WHERE "user" IS NULL;
- * -- ⚡ Add GIN indexes for JSONB fields
- * CREATE INDEX gin_idx_boardinghouse_amenities ON "BoardingHouse" USING GIN ("amenities");
- * CREATE INDEX gin_idx_room_features ON "Room" USING GIN ("features");
- * CREATE INDEX gin_idx_room_tags ON "Room" USING GIN ("tags");
- * CREATE INDEX gin_idx_auditlog_meta ON "AuditLog" USING GIN ("meta");
- * CREATE INDEX gin_idx_auditlog_user ON "AuditLog" USING GIN ("user");
- * -- add constraints for images, ❗ Reserved for future schema integrity
- * ALTER TABLE "Image" ADD CONSTRAINT check_one_relation CHECK ("boardingHouseId" IS NOT NULL OR "roomId" IS NOT NULL OR "ownerId" IS NOT NULL OR "tenantId" IS NOT NULL OR "adminId" IS NOT NULL);
- */
-
-//* for older data
-// UPDATE "BoardingHouse"
-// SET "amenities" = '[]'::jsonb
-// WHERE "amenities" IS NULL;
-
-//* do this to activate PostGis every after pushing rest
-// CREATE EXTENSION postgis;

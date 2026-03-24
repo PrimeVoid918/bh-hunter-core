@@ -67,6 +67,11 @@ export class TenantsController {
     return this.tenantsService.getVerificationStatus(+id);
   }
 
+  @Get(':id/access-status')
+  getAccessStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.tenantsService.getTenantAccessStatus(+id);
+  }
+
   @Delete(':tenantId/valid-id/:id')
   deletePermit(
     @Param('tenantId', ParseIntPipe) tenantId: number,

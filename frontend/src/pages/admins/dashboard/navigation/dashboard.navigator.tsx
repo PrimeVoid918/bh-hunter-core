@@ -1,14 +1,18 @@
 import DashboardMainScreen from '../screens/dashboard.main.screen';
+import FinancialMainScreen from '../screens/financial/financial.main.screen';
+import InsightsMainScreen from '../screens/insights/insights.main.screen';
+import OperationsMainScreen from '../screens/operations/operations.main.screen';
 import DashboardLayout from './dashboard.layout';
 
 export default function DashboardNavigator() {
   return {
-    // path: 'dashboard', //* route
-    path: '', //* route
+    path: '',
     element: <DashboardLayout />,
     children: [
-      //* registering navigators
-      { index: true, element: <DashboardMainScreen /> }, //* default screen
+      { index: true, element: <DashboardMainScreen /> },
+      { path: 'dashboard/financial', element: <FinancialMainScreen /> },
+      { path: 'dashboard/operations', element: <OperationsMainScreen /> },
+      { path: 'dashboard/insights', element: <InsightsMainScreen /> },
     ],
   };
 }

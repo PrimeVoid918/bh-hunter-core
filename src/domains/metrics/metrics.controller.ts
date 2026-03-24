@@ -10,11 +10,15 @@ export class MetricsController {
     @Query('timeframe') timeframe?: 'week' | 'month',
     @Query('userId') userId?: string,
     @Query('role') role?: 'OWNER' | 'TENANT',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
     return this.metricsService.getBookingsMetrics(
       timeframe,
       userId ? Number(userId) : undefined,
       role,
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
     );
   }
 
@@ -81,6 +85,58 @@ export class MetricsController {
       timeframe,
       userId ? Number(userId) : undefined,
       role,
+    );
+  }
+
+  @Get('reports/financial')
+  getFinancialReports(
+    @Query('timeframe') timeframe?: 'week' | 'month',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.metricsService.getFinancialReports(
+      timeframe,
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
+    );
+  }
+
+  @Get('reports/owners')
+  getOwnersReports(
+    @Query('timeframe') timeframe?: 'week' | 'month',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('sortBy')
+    sortBy?:
+      | 'totalBoardingHouses'
+      | 'totalRooms'
+      | 'totalBookings'
+      | 'totalRevenue',
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+  ) {
+    return this.metricsService.getOwnersReports({
+      timeframe,
+      from: from ? new Date(from) : undefined,
+      to: to ? new Date(to) : undefined,
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      sortBy,
+      sortOrder,
+    });
+  }
+
+  @Get('reports/insights')
+  getInsightsReports(
+    @Query('timeframe') timeframe?: 'week' | 'month',
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.metricsService.getInsights(
+      timeframe,
+      from ? new Date(from) : undefined,
+      to ? new Date(to) : undefined,
     );
   }
 }

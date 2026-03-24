@@ -649,18 +649,39 @@ export class OwnersService {
   async update(id: number, updateOwnerDto: UpdateOwnerDto) {
     if (!id) throw new BadRequestException('Id is required');
 
-    const { boardingHouses, ...dataToUpdate } = Object.fromEntries(
-      Object.entries(updateOwnerDto).filter(([_, v]) => v !== undefined),
+    const allowedFields: (keyof UpdateOwnerDto)[] = [
+      'username',
+      'firstname',
+      'lastname',
+      'email',
+      'password',
+      'age',
+      'address',
+      'phone_number',
+      'isActive',
+      'consentAcceptedAt',
+      'hasAcceptedLegitimacyConsent',
+    ];
+
+    const dataToUpdate = Object.fromEntries(
+      Object.entries(updateOwnerDto).filter(
+        ([key, v]) =>
+          v !== undefined &&
+          allowedFields.includes(key as keyof UpdateOwnerDto),
+      ),
     );
 
-    //! enable on prod
-    // if (dataToUpdate.password) {
-    //   const bcrypt = await import('bcrypt');
-    //   dataToUpdate.password = await bcrypt.hash(dataToUpdate.password, 10);
-    // }
+    if (dataToUpdate.password) {
+      const bcrypt = await import('bcrypt');
+      dataToUpdate.password = await bcrypt.hash(dataToUpdate.password, 10);
+    }
 
     try {
       return this.prisma.$transaction(async (tx) => {
+        const existingOwner = await tx.owner.findUnique({ where: { id } });
+        if (!existingOwner)
+          throw new NotFoundException(`Owner with id ${id} not found`);
+
         const updatedOwner = await tx.owner.update({
           where: { id },
           data: dataToUpdate,
@@ -681,16 +702,12 @@ export class OwnersService {
         error.code === 'P2002'
       ) {
         const meta = error.meta as { target?: string[] } | undefined;
-        if (meta?.target?.includes('email')) {
+        if (meta?.target?.includes('email'))
           throw new ConflictException('Email is already in use');
-        }
-        if (meta?.target?.includes('username')) {
+        if (meta?.target?.includes('username'))
           throw new ConflictException('Username is already in use');
-        }
         throw new ConflictException('Username or Email already exists');
       }
-
-      // this.logger.error('Failed to update owner', error);
       throw new InternalServerErrorException('Failed to update owner');
     }
   }
@@ -714,8 +731,6 @@ export class OwnersService {
     const { password, ...safeOwner } = deletedOwner;
     return safeOwner;
   }
-
-  // findBooking({}: GetBookingDto) {}
 }
 
 // TODO: fixe the delete function in service which returns no record found from prisma

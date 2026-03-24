@@ -69,6 +69,7 @@ export const getDesignTokens = (mode: 'light' | 'dark') => ({
       primary: mode === 'light' ? '#1A1A1A' : '#F8FAFC',
       secondary: mode === 'light' ? '#4A4A4A' : '#94A3B8',
     },
+    outlineVariant: mode === 'light' ? '#CCCCCC' : '#334155',
   },
   shape: { borderRadius: 12 },
   typography: {

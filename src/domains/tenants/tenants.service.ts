@@ -132,12 +132,17 @@ export class TenantsService {
         username: true,
         email: true,
         role: true,
+        phone_number: true,
+        address: true,
+        age: true,
         guardian: true,
         isActive: true,
         verificationLevel: true,
         registrationStatus: true,
         createdAt: true,
         updatedAt: true,
+        hasAcceptedLegitimacyConsent: true,
+        consentAcceptedAt: true,
       },
     });
 
@@ -232,16 +237,45 @@ export class TenantsService {
   async update(id: number, updateTenantDto: UpdateTenantDto) {
     if (!id) throw new BadRequestException('Id is required');
 
-    const dataToUpdate = Object.fromEntries(
-      Object.entries(updateTenantDto).filter(([_, v]) => v !== undefined),
-    );
+    const allowedFields: (keyof UpdateTenantDto)[] = [
+      'username',
+      'firstname',
+      'lastname',
+      'email',
+      'age',
+      'guardian',
+      'address',
+      'phone_number',
+      'hasAcceptedLegitimacyConsent',
+      'isActive',
+      'password',
+    ];
+
+    // Pick only allowed fields
+    const dataToUpdate: any = {};
+    for (const key of allowedFields) {
+      if (updateTenantDto[key] !== undefined) {
+        dataToUpdate[key] = updateTenantDto[key];
+      }
+    }
+
+    // Handle password hashing
+    if (dataToUpdate.password) {
+      dataToUpdate.password = await this.cryptoService.hashPassword(
+        dataToUpdate.password,
+      );
+    }
+
+    // Handle consentAcceptedAt automatically
+    if ('hasAcceptedLegitimacyConsent' in dataToUpdate) {
+      dataToUpdate.consentAcceptedAt = dataToUpdate.hasAcceptedLegitimacyConsent
+        ? new Date()
+        : null;
+    }
 
     try {
       return this.prisma.$transaction(async (tx) => {
-        const existingTenant = await tx.tenant.findUnique({
-          where: { id },
-        });
-
+        const existingTenant = await tx.tenant.findUnique({ where: { id } });
         if (!existingTenant) {
           throw new NotFoundException(`Tenant with id ${id} not found`);
         }
@@ -251,6 +285,7 @@ export class TenantsService {
           data: dataToUpdate,
         });
 
+        // Recompute verification level if necessary
         await this.authService.recomputeVerificationLevel(
           id,
           UserRole.TENANT,
@@ -577,6 +612,22 @@ export class TenantsService {
         expiresAt: p.expiresAt,
         fileFormat: p.fileFormat,
       })),
+    };
+  }
+
+  async getTenantAccessStatus(tenantId: number) {
+    const verification = await this.authService.getVerificationStatus(
+      tenantId,
+      'TENANT',
+    );
+
+    return {
+      tenantId,
+      isVerified: verification.verificationLevel === 'FULLY_VERIFIED',
+      verificationLevel: verification.verificationLevel,
+      canBookRoom: verification.verificationLevel === 'FULLY_VERIFIED',
+      canMakeReview: verification.verificationLevel === 'FULLY_VERIFIED',
+      canSendMessage: verification.verificationLevel === 'FULLY_VERIFIED',
     };
   }
 

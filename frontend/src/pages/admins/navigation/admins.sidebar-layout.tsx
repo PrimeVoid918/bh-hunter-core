@@ -106,7 +106,16 @@ export default function AdminSidebarLayout() {
   };
 
   const navItems = [
-    { name: 'Dashboard', icon: <DashboardIcon />, link: '/admin' },
+    {
+      name: 'Dashboard',
+      icon: <DashboardIcon />,
+      children: [
+        { name: 'Overview', link: '/admin' },
+        { name: 'Financial', link: '/admin/dashboard/financial' },
+        { name: 'Operations', link: '/admin/dashboard/operations' },
+        { name: 'Insights', link: '/admin/dashboard/insights' },
+      ],
+    },
     {
       name: 'Validation',
       icon: <ValidationIcon />,
@@ -348,13 +357,12 @@ export default function AdminSidebarLayout() {
               </MenuItem>
 
               <MenuItem
-                disabled={isLoggingOut} // Uses your authStatus === 'loading' logic
+                disabled={isLoggingOut}
                 onClick={async () => {
                   try {
                     dispatch({ type: 'auth/loginStart' });
                     await new Promise((resolve) => setTimeout(resolve, 1500));
                     dispatch(logout());
-                    // Redirecting via window.location is safer for full state reset
                     window.location.href = '/auth/login';
                   } catch (err: any) {
                     dispatch({
@@ -372,7 +380,6 @@ export default function AdminSidebarLayout() {
                 }}
               >
                 <ListItemIcon>
-                  {/* Icon color shifts when disabled */}
                   <LogoutIcon
                     fontSize="small"
                     sx={{
@@ -435,7 +442,10 @@ export default function AdminSidebarLayout() {
           flexGrow: 1,
           p: 3,
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
-          mt: '64px', // Height of AppBar
+          minWidth: 0,
+          mt: '64px',
+          display: 'flex',
+          flexDirection: 'column',
         }}
       >
         <Outlet />

@@ -8,9 +8,12 @@ import {
   SubscriptionsMetricsSchema,
   ReviewsMetricsSchema,
   OverviewMetricsSchema,
+  FinancialReportSchema,
+  OwnersReportSchema,
 } from './metrics.schema';
 import { z } from 'zod';
 import { ApiResponseType } from '../common/types/backend-reponse.type';
+import { InsightsMetricsSchema } from './metrics.insights.schema';
 
 const metricsApiRoute = `metrics`;
 
@@ -155,6 +158,88 @@ export const metricsApi = createApi({
       ) => response.results ?? {},
       providesTags: ['Metrics'],
     }),
+
+    getFinancialReports: builder.query<
+      z.infer<typeof FinancialReportSchema>,
+      | {
+          timeframe?: 'week' | 'month';
+          from?: string;
+          to?: string;
+        }
+      | undefined
+    >({
+      query: (params) => {
+        const qs = new URLSearchParams(
+          Object.entries(params ?? {})
+            .filter(([_, v]) => v != null)
+            .map(([k, v]) => [k, String(v)]),
+        );
+        return `${metricsApiRoute}/reports/financial?${qs.toString()}`;
+      },
+      transformResponse: (
+        response: ApiResponseType<z.infer<typeof FinancialReportSchema>>,
+      ) => response.results ?? {},
+      providesTags: ['Metrics'],
+    }),
+
+    getOperationsReports: builder.query<
+      z.infer<typeof OwnersReportSchema>,
+      | {
+          timeframe?: 'week' | 'month';
+          from?: string;
+          to?: string;
+          page?: number;
+          pageSize?: number;
+          sortBy?: string;
+          sortOrder?: 'asc' | 'desc';
+        }
+      | undefined
+    >({
+      query: (params) => {
+        const qs = new URLSearchParams();
+        if (params) {
+          Object.entries(params).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+              qs.append(key, String(value));
+            }
+          });
+        }
+        return `${metricsApiRoute}/reports/owners?${qs.toString()}`;
+      },
+      transformResponse: (
+        response: ApiResponseType<z.infer<typeof OwnersReportSchema>>,
+      ) =>
+        response.results ?? {
+          items: [],
+          totalOwners: 0,
+          verifiedOwners: 0,
+          unverifiedOwners: 0,
+        },
+      providesTags: ['Metrics'],
+    }),
+
+    getInsightsReports: builder.query<
+      z.infer<typeof InsightsMetricsSchema>,
+      | {
+          timeframe?: 'week' | 'month';
+          from?: string;
+          to?: string;
+        }
+      | undefined
+    >({
+      query: (params) => {
+        const qs = new URLSearchParams(
+          Object.entries(params ?? {})
+            .filter(([_, v]) => v != null)
+            .map(([k, v]) => [k, String(v)]),
+        );
+        return `${metricsApiRoute}/reports/insights?${qs.toString()}`;
+      },
+      transformResponse: (
+        response: ApiResponseType<z.infer<typeof InsightsMetricsSchema>>,
+      ) => response.results ?? {},
+      providesTags: ['Metrics'],
+    }),
   }),
 });
 
@@ -166,4 +251,7 @@ export const {
   useGetSubscriptionsMetricsQuery,
   useGetReviewsMetricsQuery,
   useGetOverviewMetricsQuery,
+  useGetFinancialReportsQuery,
+  useGetOperationsReportsQuery,
+  useGetInsightsReportsQuery,
 } = metricsApi;

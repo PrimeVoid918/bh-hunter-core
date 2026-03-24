@@ -91,28 +91,37 @@ export class ReviewsService {
   }
 
   async getBoardingHouseReviewSummary(boardingHouseId: number) {
-    const prisma = this.prisma;
-
     if (!boardingHouseId) {
       throw new BadRequestException('Boarding House ID is required!');
     }
 
+    const bHReviewSummary = await this.getReviewSummary(boardingHouseId);
+
+    return bHReviewSummary;
+  }
+
+  async getPlatformReviewSummary() {
+    const reviewSummay = await this.getReviewSummary();
+    return reviewSummay;
+  }
+
+  private async getReviewSummary(boardingHouseId?: number) {
+    const prisma = this.prisma;
+
+    const where = {
+      isDeleted: false,
+      ...(boardingHouseId && { boardingHouseId }),
+    };
+
     const [aggregate, grouped] = await Promise.all([
       prisma.review.aggregate({
-        where: {
-          boardingHouseId,
-          isDeleted: false,
-        },
+        where,
         _avg: { rating: true },
         _count: { rating: true },
       }),
-
       prisma.review.groupBy({
         by: ['rating'],
-        where: {
-          boardingHouseId,
-          isDeleted: false,
-        },
+        where,
         _count: { rating: true },
       }),
     ]);
