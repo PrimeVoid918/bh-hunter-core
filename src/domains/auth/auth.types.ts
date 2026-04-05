@@ -11,3 +11,14 @@ export const REQUIRED_DOCUMENTS: Record<UserRole, VerificationType[]> = {
   ],
   ADMIN: [],
 };
+
+export type JwtPayload = {
+  userId: string;
+  username: string;
+  role: string;
+  type: string;
+};
+
+export type AuthenticatedRequest = Request & {
+  user: JwtPayload;
+};

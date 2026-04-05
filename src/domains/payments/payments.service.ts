@@ -570,17 +570,38 @@ export class PaymentsService {
         return;
       }
 
-      //! Subscription
+      //! Booking
       if (payment.purchaseType === PurchaseType.ROOM_BOOKING) {
-        if (!payment.bookingId) {
+        if (!payment.bookingId)
           throw new Error('Booking payment missing bookingId');
-        }
 
-        const booking = await tx.booking.update({
+        // Fetch the booking with roomId & occupantsCount
+        const booking = await tx.booking.findUnique({
           where: { id: payment.bookingId },
+          select: {
+            id: true,
+            roomId: true,
+            occupantsCount: true,
+            tenantId: true,
+            boardingHouseId: true,
+          },
+        });
+
+        if (!booking) throw new Error('Booking not found');
+
+        // Update booking status
+        await tx.booking.update({
+          where: { id: booking.id },
           data: { status: BookingStatus.COMPLETED_BOOKING },
         });
 
+        // Update room currentCapacity
+        await tx.room.update({
+          where: { id: booking.roomId },
+          data: { currentCapacity: { increment: booking.occupantsCount } },
+        });
+
+        // Publish event
         this.bookingEventPublisher.completed({
           bookingId: booking.id,
           tenantId: booking.tenantId,

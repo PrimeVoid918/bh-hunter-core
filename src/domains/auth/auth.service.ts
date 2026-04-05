@@ -55,33 +55,6 @@ export class AuthService {
 
     /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
     const { password: pswd, ...filter } = validated.user;
-    // * filtering area
-    // * more filtering to be done
-    /*
-     *  "id": 1,
-     *  "username": "startlord",
-     *  "email": "star@lord.com",
-     *  "role": "TENANT",
-     *  "isActive": true,
-     *  "isVerified": false,
-     */
-    // * current shape of the response are bellow
-    /*
-     * "id": 1,
-     * "username": "startlord",
-     * "firstname": "StarUpdated",
-     * "lastname": "LordUpdated",
-     * "email": "star@lord.com",
-     * "role": "TENANT",
-     * "isActive": true,
-     * "isVerified": false,
-     * "createdAt": "2025-06-09T15:56:46.899Z",
-     * "updatedAt": "2025-06-23T12:54:27.694Z",
-     * "age": 23,
-     * "guardian": "Guardians Of the GALAXY",
-     * "address": "Egos home",
-     * "phone_number": "092313231231"
-     */
 
     const payload = {
       userId: validated.user.id,
@@ -92,7 +65,6 @@ export class AuthService {
 
     return {
       access_token: this.jtwService.sign(payload),
-      // access_token: this.jtwService.(payload),
       user: filter,
     };
   }

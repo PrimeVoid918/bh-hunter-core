@@ -42,29 +42,53 @@ export class BookingsService {
   private get prisma() {
     return this.database.getClient();
   }
-
   async createBooking(roomId: number, booking: CreateBookingDto) {
+    const occupants = booking.occupantsCount ?? 1;
+
+    if (occupants <= 0) {
+      throw new BadRequestException('Invalid occupants count');
+    }
+
     const room = await this.prisma.room.findUnique({
       where: { id: roomId },
       select: {
+        id: true,
         boardingHouseId: true,
         boardingHouse: true,
         price: true,
-        id: true,
+        maxCapacity: true,
+        currentCapacity: true,
       },
     });
 
-    if (!room) throw new Error(`Room ${roomId} not found`);
+    if (!room) {
+      throw new NotFoundException(`Room ${roomId} not found`);
+    }
+
+    // Capacity validation
+    if (room.currentCapacity + occupants > room.maxCapacity) {
+      throw new BadRequestException(
+        `Room capacity exceeded. Available slots: ${
+          room.maxCapacity - room.currentCapacity
+        }`,
+      );
+    }
 
     const bookingResult = await this.prisma.booking.create({
       data: {
         room: { connect: { id: roomId } },
         tenant: { connect: { id: booking.tenantId } },
         boardingHouse: { connect: { id: room.boardingHouseId } },
+
+        occupantsCount: occupants,
+
         checkInDate: booking.startDate,
         checkOutDate: booking.endDate,
+
         reference: `BK-${Date.now()}`,
         dateBooked: new Date(),
+
+        status: BookingStatus.PENDING_REQUEST,
       },
       include: {
         tenant: {
@@ -74,11 +98,6 @@ export class BookingsService {
           },
         },
       },
-    });
-
-    await this.prisma.booking.update({
-      where: { id: bookingResult.id },
-      data: { status: BookingStatus.PENDING_REQUEST },
     });
 
     this.bookingEventPublisher.requested({
@@ -99,6 +118,7 @@ export class BookingsService {
       roomId: roomId,
       boardingHouseId: room.boardingHouseId,
     });
+
     return bookingResult;
   }
 
@@ -390,6 +410,15 @@ export class BookingsService {
       throw new BadRequestException('Only pending requests can be approved');
     }
 
+    if (
+      booking.room.currentCapacity + booking.occupantsCount >
+      booking.room.maxCapacity
+    ) {
+      throw new BadRequestException(
+        'Room capacity is full. Reject this booking request instead.',
+      );
+    }
+
     const updatedBooking = await this.prisma.booking.update({
       where: { id: bookId },
       data: {
@@ -400,6 +429,7 @@ export class BookingsService {
     });
 
     let payment: { paymentId: number; clientSecret: string } | null = null;
+
     try {
       payment = await this.paymentsService.createBookingPayment({
         bookingId: bookId,
@@ -408,10 +438,12 @@ export class BookingsService {
       });
     } catch (err) {
       console.error('Failed to create payment for booking', bookId, err);
+
       await this.prisma.booking.update({
         where: { id: bookId },
         data: { status: BookingStatus.PAYMENT_FAILED },
       });
+
       throw err;
     }
 
@@ -428,7 +460,10 @@ export class BookingsService {
       },
     });
 
-    return { ...updatedBooking, paymentClientSecret: payment.clientSecret };
+    return {
+      ...updatedBooking,
+      paymentClientSecret: payment.clientSecret,
+    };
   }
 
   async patchRejectBooking(
@@ -582,11 +617,11 @@ export class BookingsService {
       },
       include: {
         room: {
-          // Use select for EVERYTHING inside this block
           select: {
-            price: true, // The scalar field you wanted
+            price: true,
+            maxCapacity: true,
+            currentCapacity: true,
             boardingHouse: {
-              // The relation you wanted
               select: {
                 ownerId: true,
               },
@@ -614,7 +649,7 @@ export class BookingsService {
       }
     }
 
-    return booking; // ✅ return it so the caller can use the data directly
+    return booking;
   }
 
   async cancelExpiredBookings() {
@@ -638,6 +673,29 @@ export class BookingsService {
     }
 
     return expiredBookings.length;
+  }
+
+  public async confirmBookingPayment(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: { room: true },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    // Increment room currentCapacity
+    await this.prisma.room.update({
+      where: { id: booking.roomId },
+      data: {
+        currentCapacity: { increment: booking.occupantsCount },
+      },
+    });
+
+    // Update booking status
+    return this.prisma.booking.update({
+      where: { id: bookingId },
+      data: { status: BookingStatus.COMPLETED_BOOKING },
+    });
   }
 
   private calculateRefundPercentage(paymentCreatedAt: Date): number {

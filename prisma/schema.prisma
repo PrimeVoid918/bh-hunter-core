@@ -323,6 +323,7 @@ model Booking {
   boardingHouseId Int
   boardingHouse   BoardingHouse @relation(fields: [boardingHouseId], references: [id])
   bookingType     BookingType   @default(RESERVATION)
+  occupantsCount  Int           @default(1) // tracking
   dateBooked      DateTime
   checkInDate     DateTime
   checkOutDate    DateTime

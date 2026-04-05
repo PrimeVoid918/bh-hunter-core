@@ -6,6 +6,8 @@ import {
   IsEnum,
   ValidateIf,
   IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 
 import { BookingStatus, BookingType } from '@prisma/client';
@@ -21,15 +23,22 @@ export class CreateBookingDto {
 
   @Type(() => Date)
   @IsDate()
-  startDate!: Date; // Change the type to Date
+  startDate!: Date;
 
   @Type(() => Date)
   @IsDate()
-  endDate!: Date; // Change the type to Date
+  endDate!: Date;
 
   @IsOptional()
   @IsString()
   note?: string;
+
+  @IsOptional() // if ui does not have any value, defaults to 1
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  occupantsCount?: number;
 }
 
 /**
