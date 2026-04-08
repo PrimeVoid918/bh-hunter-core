@@ -13,23 +13,15 @@ import { IDatabaseService } from 'src/infrastructure/database/database.interface
 import { CreateTenantDto } from './dto/create-tenant.dto';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { FindTenantsDto } from './dto/find-tenants.dto';
-import {
-  MediaType,
-  Tenant,
-  UserRole,
-  VerificationStatus,
-  VerificationType,
-} from '@prisma/client';
+import { MediaType, UserRole } from '@prisma/client';
 
 import { ImageService } from 'src/infrastructure/image/image.service';
 import { CreateVerifcationDto } from '../verifications/dto/create-verifcation.dto';
-// import { VerificationService } from '../verifications/verification.service';
 import { VerifcationService } from '../verifications/verification.service';
 import { Logger } from 'src/common/logger/logger.service';
 import { hasNullOrUndefinedDeep } from 'src/infrastructure/shared/utils/payload-validation.utils';
 import { isPrismaErrorCode } from 'src/infrastructure/shared/utils/prisma.exceptions';
 import { UpdateVerifcationDto } from '../verifications/dto/update-verifcation.dto';
-import { FindOneVerificationDto } from '../verifications/dto/findOne-verification.dto';
 import { AuthService } from '../auth/auth.service';
 import { AccountsPublisher } from '../accounts/accounts.publisher';
 import { CryptoService } from '../auth/utilities/crypto.service';

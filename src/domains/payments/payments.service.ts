@@ -306,14 +306,25 @@ export class PaymentsService {
 
     if (!payment) throw new NotFoundException('Payment not found');
 
+    if (payment.status !== PaymentStatus.PAID) {
+      throw new BadRequestException('Only paid payments can be refunded');
+    }
+
     const refundAmount = amount ?? payment.amount;
 
     await this.provider.refundPayment(payment, refundAmount, reason);
 
+    //* use this to display `Refunded ₱450 of ₱900`
     return await this.prisma.payment.update({
       where: { id: paymentId },
       data: {
         status: PaymentStatus.REFUNDED,
+        metadata: {
+          ...((payment.metadata as object) ?? {}),
+          refundedAmount: refundAmount.toString(),
+          refundReason: reason,
+          refundedAt: new Date().toISOString(),
+        },
       },
     });
   }

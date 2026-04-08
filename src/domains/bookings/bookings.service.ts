@@ -42,11 +42,27 @@ export class BookingsService {
   private get prisma() {
     return this.database.getClient();
   }
+
   async createBooking(roomId: number, booking: CreateBookingDto) {
     const occupants = booking.occupantsCount ?? 1;
 
     if (occupants <= 0) {
       throw new BadRequestException('Invalid occupants count');
+    }
+
+    const existingActiveBooking = await this.prisma.booking.findFirst({
+      where: {
+        tenantId: booking.tenantId,
+        status: BookingStatus.COMPLETED_BOOKING,
+        isDeleted: false,
+      },
+      select: { id: true },
+    });
+
+    if (existingActiveBooking) {
+      throw new BadRequestException(
+        'You already have an active booking. You cannot request another room.',
+      );
     }
 
     const room = await this.prisma.room.findUnique({
@@ -523,6 +539,13 @@ export class BookingsService {
       throw new NotFoundException('Booking not found');
     }
 
+    if (
+      booking.status === BookingStatus.REFUNDED_PAYMENT ||
+      booking.status === BookingStatus.CANCELLED_BOOKING
+    ) {
+      return booking;
+    }
+
     const { userId, role } = payload;
 
     if (role === 'TENANT' && booking.tenantId !== userId) {
@@ -552,7 +575,15 @@ export class BookingsService {
      * Only check refunds if booking was completed
      */
 
-    if (booking.status !== BookingStatus.COMPLETED_BOOKING) {
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        bookingId: bookId,
+        status: PaymentStatus.PAID,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!payment) {
       return updated;
     }
 
@@ -560,13 +591,12 @@ export class BookingsService {
      * REFUND LOGIC
      */
 
-    const payment = await this.prisma.payment.findFirst({
-      where: { bookingId: bookId },
-      orderBy: { createdAt: 'desc' },
-    });
-
     if (payment && payment.status === PaymentStatus.PAID) {
-      const percentage = this.calculateRefundPercentage(payment.createdAt);
+      if (new Date() >= booking.checkInDate) {
+        return updated;
+      }
+
+      const percentage = this.calculateRefundPercentage(booking.checkInDate);
 
       if (percentage > 0) {
         const refundAmount = payment.amount.mul(percentage);
@@ -576,6 +606,11 @@ export class BookingsService {
           refundAmount,
           payload.reason ?? 'Booking cancelled within refund window',
         );
+
+        await this.prisma.booking.update({
+          where: { id: bookId },
+          data: { status: BookingStatus.REFUNDED_PAYMENT },
+        });
       }
     }
 
@@ -698,21 +733,21 @@ export class BookingsService {
     });
   }
 
-  private calculateRefundPercentage(paymentCreatedAt: Date): number {
+  private calculateRefundPercentage(checkInDate: Date): number {
     const now = new Date();
 
-    const hoursPassed =
-      (now.getTime() - paymentCreatedAt.getTime()) / (1000 * 60 * 60);
+    const hoursBeforeCheckIn =
+      (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-    if (hoursPassed <= 24) {
+    if (hoursBeforeCheckIn >= 72) {
       return 1; // 100%
     }
 
-    if (hoursPassed <= 48) {
+    if (hoursBeforeCheckIn >= 48) {
       return 0.75; // 75%
     }
 
-    if (hoursPassed <= 72) {
+    if (hoursBeforeCheckIn >= 24) {
       return 0.5; // 50%
     }
 

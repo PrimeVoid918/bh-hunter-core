@@ -158,6 +158,17 @@ export class RoomsService {
   // FIND ONE
   // -------------------------------------------------------
   async findOne(bhId: number, roomId: number) {
+    const boardingHouse = await this.prisma.boardingHouse.findFirst({
+      where: {
+        id: bhId,
+        isDeleted: false,
+      },
+    });
+
+    if (!boardingHouse) {
+      throw new NotFoundException('Boarding house not found.');
+    }
+
     const room = await this.prisma.room.findFirst({
       where: {
         id: roomId,
@@ -182,7 +193,7 @@ export class RoomsService {
       images,
       (url, isPublic) => this.imageService.getMediaPath(url, isPublic),
       ResourceType.ROOM,
-      room.id, // ✅ fixed
+      room.id,
       [MediaType.GALLERY, MediaType.THUMBNAIL],
     );
 
