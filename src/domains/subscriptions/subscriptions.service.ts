@@ -229,11 +229,11 @@ export class SubscriptionsService {
     const refundPercentage = remainingDays / totalDays;
     const refundAmount = new Decimal(payment.amount).mul(refundPercentage);
 
-    await this.paymentsService.refundPayment(
-      payment.id,
-      refundAmount,
-      'requested_by_customer',
-    );
+    await this.paymentsService.refundPayment({
+      paymentId: payment.id,
+      amount: refundAmount,
+      reason: 'requested_by_customer',
+    });
 
     return this.prisma.subscription.update({
       where: { id: subscription.id },

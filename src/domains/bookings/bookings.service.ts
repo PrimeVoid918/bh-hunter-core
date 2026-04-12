@@ -28,6 +28,7 @@ import { UserUnionService } from '../auth/userUnion.service';
 import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
 import { Decimal } from '@prisma/client/runtime/library';
+import { PaymongoReasons } from '../../../dist/domains/payments/dto/types';
 
 @Injectable()
 export class BookingsService {
@@ -583,6 +584,8 @@ export class BookingsService {
       orderBy: { createdAt: 'desc' },
     });
 
+    console.log('Refund payment found:', payment);
+
     if (!payment) {
       return updated;
     }
@@ -598,14 +601,22 @@ export class BookingsService {
 
       const percentage = this.calculateRefundPercentage(booking.checkInDate);
 
+      console.log('REFUND DEBUG', {
+        now: new Date(),
+        checkInDate: booking.checkInDate,
+        nowTimestamp: Date.now(),
+        checkInTimestamp: booking.checkInDate.getTime(),
+      });
+
       if (percentage > 0) {
         const refundAmount = payment.amount.mul(percentage);
 
-        await this.paymentsService.refundPayment(
-          payment.id,
-          refundAmount,
-          payload.reason ?? 'Booking cancelled within refund window',
-        );
+        await this.paymentsService.refundPayment({
+          paymentId: payment.id,
+          amount: refundAmount,
+          reason: payload.reason ?? 'Tenant made a refund',
+          paymongoReason: 'requested_by_customer',
+        });
 
         await this.prisma.booking.update({
           where: { id: bookId },

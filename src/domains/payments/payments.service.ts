@@ -24,6 +24,7 @@ import {
 import { Decimal } from '@prisma/client/runtime/library';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
+import { PaymongoReasons } from './dto/payments.types';
 
 interface CreateBookingPaymentInput {
   bookingId: number;
@@ -299,7 +300,17 @@ export class PaymentsService {
   }
 
   /** Refund a payment (only via PayMpongo) */
-  async refundPayment(paymentId: number, amount?: Decimal, reason?: string) {
+  async refundPayment({
+    paymentId,
+    amount,
+    reason,
+    paymongoReason,
+  }: {
+    paymentId: number;
+    amount?: Decimal;
+    reason?: string;
+    paymongoReason?: PaymongoReasons;
+  }) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
     });
@@ -312,7 +323,11 @@ export class PaymentsService {
 
     const refundAmount = amount ?? payment.amount;
 
-    await this.provider.refundPayment(payment, refundAmount, reason);
+    await this.provider.refundPayment({
+      payment: payment,
+      refundAmount: refundAmount,
+      reason: paymongoReason,
+    });
 
     //* use this to display `Refunded ₱450 of ₱900`
     return await this.prisma.payment.update({

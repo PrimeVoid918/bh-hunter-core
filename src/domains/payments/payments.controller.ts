@@ -10,7 +10,7 @@ import { PaymentsService } from './payments.service';
 import { createHmac } from 'crypto';
 import { ConfigService } from 'src/config/config.service';
 import { Request } from 'express';
-import { PaymongoWebhookPayload } from './dto/types';
+import { PaymongoWebhookPayload } from './dto/payments.types';
 
 @Controller('payments')
 export class PaymentsController {

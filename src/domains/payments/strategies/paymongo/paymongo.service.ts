@@ -12,6 +12,7 @@ import {
   PaymentIntentResult,
 } from './paymongo.interface';
 import { Decimal } from '@prisma/client/runtime/library';
+import { PaymongoReasons } from '../../dto/payments.types';
 
 @Injectable()
 export class PaymongoService implements PaymentProviderAdapter {
@@ -143,16 +144,26 @@ export class PaymongoService implements PaymentProviderAdapter {
   }
 
   /** Refund a payment */
-  async refundPayment(
-    payment: Payment,
-    refundAmount: Decimal,
-    reason?: string,
-  ): Promise<any> {
+  async refundPayment({
+    payment,
+    refundAmount,
+    reason,
+  }: {
+    payment: Payment;
+    refundAmount: Decimal;
+    reason?: PaymongoReasons | undefined;
+  }): Promise<any> {
     if (!payment.providerPaymentId) {
       throw new InternalServerErrorException(
         'Payment has no provider payment ID',
       );
     }
+
+    console.log('REFUND REQUEST', {
+      payment: payment,
+      refundAmount,
+      reason,
+    });
 
     try {
       const res = await axios.post(

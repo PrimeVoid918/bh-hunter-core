@@ -1,5 +1,6 @@
 import { Payment } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { PaymongoReasons } from '../../dto/payments.types';
 
 export interface PaymentIntentResult {
   id: string; // provider's payment intent ID
@@ -27,11 +28,15 @@ export interface PaymentProviderAdapter {
    * @param refundAmount - amount to refund
    * @param reason - optional reason
    */
-  refundPayment(
-    payment: Payment,
-    refundAmount: Decimal,
-    reason?: string,
-  ): Promise<any>;
+  refundPayment({
+    payment,
+    refundAmount,
+    reason,
+  }: {
+    payment: Payment;
+    refundAmount: Decimal;
+    reason?: PaymongoReasons | undefined;
+  }): Promise<any>;
 
   /**
    * Retrieve a payment intent by ID

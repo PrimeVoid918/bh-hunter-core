@@ -51,3 +51,5 @@ export interface PaymongoWebhookPayload {
     attributes: PaymongoWebhookEventAttributes;
   };
 }
+
+export type PaymongoReasons = 'requested_by_customer' | 'duplicate' | undefined;
