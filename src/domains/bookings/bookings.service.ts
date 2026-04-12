@@ -27,8 +27,6 @@ import { ResourceType } from 'src/infrastructure/file-upload/types/resources-typ
 import { UserUnionService } from '../auth/userUnion.service';
 import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
-import { Decimal } from '@prisma/client/runtime/library';
-import { PaymongoReasons } from '../../../dist/domains/payments/dto/types';
 
 @Injectable()
 export class BookingsService {
