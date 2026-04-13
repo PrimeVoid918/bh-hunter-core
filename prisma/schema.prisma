@@ -44,6 +44,14 @@ enum BookingStatus {
   REFUNDED_PAYMENT
 }
 
+enum RefundStatus {
+  NONE
+  ELIGIBLE
+  PARTIAL
+  FULL
+  NOT_REFUNDABLE
+}
+
 enum BookingType {
   RESERVATION // owner-approved reservation (awaiting payment)
   INSTANT // auto-confirmed (instant booking)

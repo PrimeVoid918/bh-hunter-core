@@ -12,6 +12,7 @@ import {
   ResourceType as PrismaResourceType,
   Prisma,
   PaymentStatus,
+  RefundStatus,
 } from '@prisma/client';
 
 import {
@@ -360,6 +361,133 @@ export class BookingsService {
         ...booking.boardingHouse,
         thumbnail: bhThumbnail,
       },
+    };
+  }
+
+  async getBookingStatus(bookId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookId },
+      include: {
+        payments: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    const payment = booking.payments?.[0] ?? null;
+
+    let refundInfo: {
+      eligible: boolean;
+      percentage: number;
+      refundAmount: number;
+      totalAmount: number;
+      hoursBeforeCheckIn: number;
+    } | null = null;
+
+    if (payment && payment.status === PaymentStatus.PAID) {
+      const now = new Date();
+      const checkInDate = booking.checkInDate;
+
+      const hoursBeforeCheckIn =
+        (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+      const percentage = this.calculateRefundPercentage(checkInDate);
+
+      const totalAmount = Number(payment.amount);
+      const refundAmount = Number(payment.amount) * percentage;
+
+      refundInfo = {
+        eligible: percentage > 0,
+        percentage,
+        refundAmount,
+        totalAmount,
+        hoursBeforeCheckIn,
+      };
+    }
+
+    return {
+      bookingId: booking.id,
+      bookingStatus: booking.status,
+      paymentStatus: payment?.status ?? null,
+      refund: refundInfo,
+    };
+  }
+
+  async previewRefund(bookId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookId },
+      include: {
+        room: {
+          include: {
+            boardingHouse: { select: { ownerId: true } },
+          },
+        },
+      },
+    });
+
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        bookingId: bookId,
+        status: PaymentStatus.PAID,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // No payment → nothing to refund
+    if (!payment) {
+      return {
+        refundStatus: RefundStatus.NONE,
+        refundable: false,
+        percentage: 0,
+        refundAmount: '0',
+        reason: 'No payment found',
+      };
+    }
+
+    const now = new Date();
+
+    if (now >= booking.checkInDate) {
+      return {
+        refundStatus: RefundStatus.NOT_REFUNDABLE,
+        refundable: false,
+        percentage: 0,
+        refundAmount: '0',
+        reason: 'Past check-in date',
+      };
+    }
+
+    const percentage = this.calculateRefundPercentage(booking.checkInDate);
+
+    let refundStatus: RefundStatus;
+
+    if (percentage === 1) {
+      refundStatus = RefundStatus.FULL;
+    } else if (percentage >= 0.5) {
+      refundStatus = RefundStatus.PARTIAL;
+    } else if (percentage > 0) {
+      refundStatus = RefundStatus.ELIGIBLE;
+    } else {
+      refundStatus = RefundStatus.NOT_REFUNDABLE;
+    }
+
+    const refundAmount = payment.amount.mul(percentage);
+
+    return {
+      refundStatus,
+      refundable: percentage > 0,
+      percentage,
+      refundAmount: refundAmount.toString(),
+      originalAmount: payment.amount.toString(),
+      currency: payment.currency,
+      checkInDate: booking.checkInDate,
+      now,
     };
   }
 
@@ -761,6 +889,31 @@ export class BookingsService {
     }
 
     return 0; // no refund
+  }
+
+  private buildRefundSummary(params: {
+    paymentAmount: Prisma.Decimal;
+    refundAmount: Prisma.Decimal;
+    percentage: number;
+    reason: string;
+    paymongoReason: string;
+  }) {
+    const { paymentAmount, refundAmount, percentage, reason, paymongoReason } =
+      params;
+
+    const total = Number(paymentAmount);
+    const refund = Number(refundAmount);
+
+    return {
+      totalAmount: total,
+      refundAmount: refund,
+      refundedPercentage: percentage,
+      nonRefundableAmount: total - refund,
+      reason,
+      paymongoReason,
+      isFullyRefunded: percentage === 1,
+      isNoRefund: percentage === 0,
+    };
   }
 }
 // PENDING_REQUEST
