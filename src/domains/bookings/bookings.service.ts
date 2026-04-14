@@ -28,6 +28,7 @@ import { ResourceType } from 'src/infrastructure/file-upload/types/resources-typ
 import { UserUnionService } from '../auth/userUnion.service';
 import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
+import { RefundPolicy } from './refund.policy';
 
 @Injectable()
 export class BookingsService {
@@ -37,6 +38,7 @@ export class BookingsService {
     private readonly paymentsService: PaymentsService,
     private readonly imageService: ImageService,
     private readonly bookingEventPublisher: BookingEventPublisher,
+    private readonly refundPolicy: RefundPolicy,
   ) {}
 
   private get prisma() {
@@ -396,8 +398,9 @@ export class BookingsService {
       const hoursBeforeCheckIn =
         (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-      const percentage = this.calculateRefundPercentage(checkInDate);
+      const policy = this.refundPolicy.calculate(checkInDate);
 
+      const percentage = policy.percentage;
       const totalAmount = Number(payment.amount);
       const refundAmount = Number(payment.amount) * percentage;
 
@@ -463,7 +466,10 @@ export class BookingsService {
       };
     }
 
-    const percentage = this.calculateRefundPercentage(booking.checkInDate);
+    // const percentage = this.calculateRefundPercentage(booking.checkInDate);
+    // const psercentage = this.re(booking.checkInDate, new Date());
+    const policy = this.refundPolicy.calculate(booking.checkInDate, new Date());
+    const percentage = policy.percentage;
 
     let refundStatus: RefundStatus;
 
@@ -725,7 +731,12 @@ export class BookingsService {
         return updated;
       }
 
-      const percentage = this.calculateRefundPercentage(booking.checkInDate);
+      const policy = this.refundPolicy.calculate(
+        booking.checkInDate,
+        new Date(),
+      );
+
+      const percentage = policy.percentage;
 
       console.log('REFUND DEBUG', {
         now: new Date(),
@@ -868,27 +879,6 @@ export class BookingsService {
       where: { id: bookingId },
       data: { status: BookingStatus.COMPLETED_BOOKING },
     });
-  }
-
-  private calculateRefundPercentage(checkInDate: Date): number {
-    const now = new Date();
-
-    const hoursBeforeCheckIn =
-      (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-    if (hoursBeforeCheckIn >= 72) {
-      return 1; // 100%
-    }
-
-    if (hoursBeforeCheckIn >= 48) {
-      return 0.75; // 75%
-    }
-
-    if (hoursBeforeCheckIn >= 24) {
-      return 0.5; // 50%
-    }
-
-    return 0; // no refund
   }
 
   private buildRefundSummary(params: {
