@@ -33,12 +33,8 @@ export class BookingsController {
   }
 
   @Get(':id/status')
-  getBookingStatus(
-    @Param('id', ParseIntPipe) id: number,
-    @Query('mock') mock?: string,
-  ) {
-    // return this.bookingsService.getBookingStatus(id);
-    return this.refund_test({ test_val: mock?.toUpperCase() });
+  getBookingStatus(@Param('id', ParseIntPipe) id: number) {
+    return this.bookingsService.getBookingStatus(id);
   }
 
   @Get(':id/payment')
@@ -47,45 +43,7 @@ export class BookingsController {
   }
 
   @Get(':id/refund-preview')
-  previewRefund(
-    @Param('id', ParseIntPipe) id: number,
-    @Query('mock') mock: string,
-  ) {
-    // return this.bookingsService.previewRefund(id);
-
-    if (mock === 'full') {
-      return {
-        refundStatus: 'FULL',
-        refundable: true,
-        percentage: 1,
-        refundAmount: '12000',
-        originalAmount: '12000',
-        currency: 'PHP',
-      };
-    }
-
-    if (mock === 'partial') {
-      return {
-        refundStatus: 'PARTIAL',
-        refundable: true,
-        percentage: 0.5,
-        refundAmount: '6000',
-        originalAmount: '12000',
-        currency: 'PHP',
-      };
-    }
-
-    if (mock === 'none') {
-      return {
-        refundStatus: 'NOT_REFUNDABLE',
-        refundable: false,
-        percentage: 0,
-        refundAmount: '0',
-        originalAmount: '12000',
-        currency: 'PHP',
-      };
-    }
-
+  previewRefund(@Param('id', ParseIntPipe) id: number) {
     return this.bookingsService.previewRefund(id);
   }
 
