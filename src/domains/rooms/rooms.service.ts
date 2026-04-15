@@ -14,6 +14,8 @@ import { CreateRoomsWithGallery } from './types';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
 import { DBClient } from 'src/infrastructure/image/types/types';
 
+// TODO: do somehing about owners who ran out of subsp
+
 @Injectable()
 export class RoomsService {
   constructor(

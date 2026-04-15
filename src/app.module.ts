@@ -33,6 +33,7 @@ import { NotificationsModule } from './domains/notifications/notifications.modul
 import { AccountsModule } from './domains/accounts/accounts.module';
 import { MetricsModule } from './domains/metrics/metrics.module';
 import { SubscriptionsModule } from './domains/subscriptions/subscriptions.module';
+import { PoliciesModule } from './domains/policies/policies.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { SubscriptionsModule } from './domains/subscriptions/subscriptions.modul
     AccountsModule,
     MetricsModule,
     SubscriptionsModule,
+    PoliciesModule,
   ],
   controllers: [AppController],
   providers: [

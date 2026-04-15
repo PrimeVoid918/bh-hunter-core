@@ -3,7 +3,6 @@ import { CreateBoardingHouseDto } from './dto/create-boarding-house.dto';
 import { UpdateBoardingHouseDto } from './dto/update-boarding-house.dto';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 
-// TODO: clean this later
 import { BoardingHouse, MediaType, Prisma } from '@prisma/client';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
 import { LocationService } from 'src/domains/location/location.service';
@@ -12,6 +11,8 @@ import { FindBoardingHouseDto } from './dto/find-boarding-house.dto';
 import { RoomsService } from '../rooms/rooms.service';
 import { ImageService } from 'src/infrastructure/image/image.service';
 import { FileMap } from 'src/common/types/file.type';
+
+// TODO: do something about owners who ran out of subs
 
 @Injectable()
 export class BoardingHousesService {

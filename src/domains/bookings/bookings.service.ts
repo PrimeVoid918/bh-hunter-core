@@ -30,6 +30,10 @@ import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
 import { RefundPolicy } from './refund.policy';
 
+/**
+ * TODO: to do, owner cannot accept or do anything on the bookings if they ran out of subs
+ */
+
 @Injectable()
 export class BookingsService {
   constructor(

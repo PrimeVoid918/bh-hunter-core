@@ -10,6 +10,7 @@ import { ownerApi } from '../../infrastructure/owner/owner.redux.api';
 import { validDocsApi } from '@/infrastructure/valid-docs/valid-docs.redux.api';
 import { subscriptionsApi } from '@/infrastructure/subscriptions/subscriptions.redux.api';
 import { metricsApi } from '@/infrastructure/metrics/metric.redux.api';
+import { policiesApi } from '@/infrastructure/policies/policies.redix.api';
 
 export const store = configureStore({
   reducer: {
@@ -28,6 +29,7 @@ export const store = configureStore({
     // boardingHouses: boardingHouseSlice,
     // [boardingHouseApi.reducerPath]: boardingHouseApi.reducer,
     [metricsApi.reducerPath]: metricsApi.reducer,
+    [policiesApi.reducerPath]: policiesApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     // getDefaultMiddleware().concat(boardingHouseApi.middleware),
@@ -38,7 +40,8 @@ export const store = configureStore({
       .concat(ownerApi.middleware)
       .concat(validDocsApi.middleware)
       .concat(subscriptionsApi.middleware)
-      .concat(metricsApi.middleware),
+      .concat(metricsApi.middleware)
+      .concat(policiesApi.middleware),
   // .concat(boardingHouseApi.middleware),,
 });
 

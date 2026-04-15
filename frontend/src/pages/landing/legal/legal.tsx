@@ -6,182 +6,315 @@ import {
   Typography,
   Grid,
   Paper,
-  List,
-  ListItemButton,
-  ListItemText,
-  Divider,
+  Button,
   Stack,
+  Collapse,
 } from '@mui/material';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import GavelIcon from '@mui/icons-material/Gavel';
 import ShieldIcon from '@mui/icons-material/Shield';
+import PaymentsIcon from '@mui/icons-material/Payments';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import PersonSearchIcon from '@mui/icons-material/PersonSearch';
 
-import TermsAndConditions from '@/data/TermsAndConditions';
-import BHHunterOwnerLegitimacyConsent from '@/data/BHHunterOwnerLegitimacyConsent';
+import {
+  useGetTermsQuery,
+  useGetPrivacyQuery,
+  useGetRefundPoliciesQuery,
+  useGetUserLegitimacyConsentPoliciesQuery,
+} from '@/infrastructure/policies/policies.redix.api';
 
-type LegalTab = 'terms' | 'privacy';
+type LegalTab = 'terms' | 'privacy' | 'consent' | 'refund';
 
 export default function LegalPage() {
   const { hash } = useLocation();
   const [activeTab, setActiveTab] = useState<LegalTab>('terms');
+
+  // Dynamic sub-types
+  const [refundType, setRefundType] = useState<'booking' | 'subscription'>(
+    'booking',
+  );
+  // Updated to match your new API type: 'owner' | 'tenant'
+  const [consentType, setConsentType] = useState<'owner' | 'tenant'>('tenant');
+
+  const [refundOpen, setRefundOpen] = useState(false);
+  const [consentOpen, setConsentOpen] = useState(false);
+
   const scrollParentRef = useRef<HTMLDivElement>(null);
 
+  // 1. Hook Integration
+  const { data: termsHtml, isFetching: isTermsLoading } = useGetTermsQuery();
+  const { data: privacyHtml, isFetching: isPrivacyLoading } =
+    useGetPrivacyQuery();
+  const { data: refundHtml, isFetching: isRefundLoading } =
+    useGetRefundPoliciesQuery({ type: refundType });
+  const { data: consentHtml, isFetching: isConsentLoading } =
+    useGetUserLegitimacyConsentPoliciesQuery({ type: consentType });
+
+  // 2. Active Content Selector
+  const getActiveContent = () => {
+    switch (activeTab) {
+      case 'terms':
+        return termsHtml;
+      case 'privacy':
+        return privacyHtml;
+      case 'consent':
+        return consentHtml;
+      case 'refund':
+        return refundHtml;
+      default:
+        return '';
+    }
+  };
+
+  const isContentLoading =
+    isTermsLoading || isPrivacyLoading || isRefundLoading || isConsentLoading;
+  const activeContent = getActiveContent();
+
   useEffect(() => {
-    if (hash === '#privacy' || hash === '#consent') {
+    if (hash === '#privacy') {
       setActiveTab('privacy');
+    } else if (hash === '#consent') {
+      setActiveTab('consent');
+      setConsentOpen(true);
+    } else if (hash === '#refund') {
+      setActiveTab('refund');
+      setRefundOpen(true);
     } else {
       setActiveTab('terms');
     }
     scrollParentRef.current?.scrollTo(0, 0);
   }, [hash]);
 
-  const activeContent =
-    activeTab === 'terms' ? TermsAndConditions : BHHunterOwnerLegitimacyConsent;
+  const handleRefundClick = (type: 'booking' | 'subscription') => {
+    setActiveTab('refund');
+    setRefundType(type);
+  };
+
+  const handleConsentClick = (type: 'owner' | 'tenant') => {
+    setActiveTab('consent');
+    setConsentType(type);
+  };
+
+  const NavButton = ({
+    icon,
+    label,
+    onClick,
+    active,
+    hasDropdown,
+    isOpen,
+  }: any) => (
+    <Button
+      fullWidth
+      variant={active && !hasDropdown ? 'contained' : 'text'}
+      onClick={onClick}
+      startIcon={icon}
+      endIcon={
+        hasDropdown ? (
+          isOpen ? (
+            <ExpandMoreIcon fontSize="small" />
+          ) : (
+            <KeyboardArrowRightIcon fontSize="small" />
+          )
+        ) : null
+      }
+      sx={{
+        justifyContent: 'flex-start',
+        px: 3,
+        py: 1.5,
+        borderRadius: '100px',
+        bgcolor: active && !hasDropdown ? 'primary.main' : 'transparent',
+        color: active && !hasDropdown ? 'white' : 'text.primary',
+        '&:hover': {
+          bgcolor: active && !hasDropdown ? 'primary.dark' : 'action.hover',
+        },
+      }}
+    >
+      <Box sx={{ flexGrow: 1, textAlign: 'left' }}>{label}</Box>
+    </Button>
+  );
+
+  const SubItem = ({ label, active, onClick }: any) => (
+    <Button
+      onClick={onClick}
+      sx={{
+        justifyContent: 'flex-start',
+        borderRadius: '100px',
+        fontSize: '0.85rem',
+        px: 3,
+        py: 1,
+        color: active ? 'primary.main' : 'text.secondary',
+        bgcolor: active ? 'primary.light' : 'transparent',
+        fontWeight: active ? 700 : 500,
+        '&:hover': { bgcolor: 'primary.light', opacity: 0.8 },
+      }}
+    >
+      • {label}
+    </Button>
+  );
 
   return (
     <Box
       sx={{
         bgcolor: 'background.default',
         minHeight: '100vh',
-        py: { xs: 4, md: 10 },
+        py: { xs: 4, md: 8 },
       }}
     >
       <Container maxWidth="lg">
         <Grid container spacing={4}>
-          {/* left: Sidebar Navigation */}
           <Grid size={{ xs: 12, md: 3 }}>
             <Box sx={{ position: 'sticky', top: 100 }}>
-              <Typography
-                variant="h5"
-                sx={{ fontWeight: 800, mb: 3, fontFamily: 'Poppins' }}
-              >
+              <Typography variant="h5" sx={{ fontWeight: 800, mb: 3 }}>
                 Legal Center
               </Typography>
 
-              <Paper
+              <Stack
+                spacing={0.5}
                 sx={{
+                  p: 1,
+                  bgcolor: 'background.paper',
                   border: '1px solid',
                   borderColor: 'outlineVariant',
-                  borderRadius: 4,
-                  overflow: 'hidden',
+                  borderRadius: '16px',
                 }}
               >
-                <List disablePadding>
-                  <ListItemButton
-                    selected={activeTab === 'terms'}
-                    onClick={() => setActiveTab('terms')}
-                    sx={{
-                      py: 2,
-                      '&.Mui-selected': {
-                        bgcolor: 'primary.light',
-                        color: 'primary.main',
-                      },
-                    }}
-                  >
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <GavelIcon fontSize="small" />
-                      <ListItemText
-                        primary="Terms of Use"
-                        primaryTypographyProps={{ fontWeight: 600 }}
-                      />
-                    </Stack>
-                  </ListItemButton>
+                <NavButton
+                  icon={<GavelIcon />}
+                  label="Terms of Use"
+                  active={activeTab === 'terms'}
+                  onClick={() => {
+                    setActiveTab('terms');
+                    setRefundOpen(false);
+                    setConsentOpen(false);
+                  }}
+                />
 
-                  <Divider />
+                <NavButton
+                  icon={<ShieldIcon />}
+                  label="Privacy Policy"
+                  active={activeTab === 'privacy'}
+                  onClick={() => {
+                    setActiveTab('privacy');
+                    setRefundOpen(false);
+                    setConsentOpen(false);
+                  }}
+                />
 
-                  <ListItemButton
-                    selected={activeTab === 'privacy'}
-                    onClick={() => setActiveTab('privacy')}
-                    sx={{
-                      py: 2,
-                      '&.Mui-selected': {
-                        bgcolor: 'primary.light',
-                        color: 'primary.main',
-                      },
-                    }}
-                  >
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <ShieldIcon fontSize="small" />
-                      <ListItemText
-                        primary="Privacy Policy"
-                        primaryTypographyProps={{ fontWeight: 600 }}
-                      />
-                    </Stack>
-                  </ListItemButton>
-                </List>
-              </Paper>
+                <NavButton
+                  icon={<PersonSearchIcon />}
+                  label="User Consent"
+                  active={activeTab === 'consent'}
+                  hasDropdown
+                  isOpen={consentOpen}
+                  onClick={() => {
+                    setConsentOpen(!consentOpen);
+                    setRefundOpen(false);
+                  }}
+                />
+                <Collapse in={consentOpen} timeout="auto" unmountOnExit>
+                  <Stack spacing={0.5} sx={{ mt: 0.5, pl: 2, pb: 1 }}>
+                    <SubItem
+                      label="Tenant Legitimacy"
+                      active={
+                        activeTab === 'consent' && consentType === 'tenant'
+                      }
+                      onClick={() => handleConsentClick('tenant')}
+                    />
+                    <SubItem
+                      label="Owner Verification"
+                      active={
+                        activeTab === 'consent' && consentType === 'owner'
+                      }
+                      onClick={() => handleConsentClick('owner')}
+                    />
+                  </Stack>
+                </Collapse>
 
-              <Box
-                sx={{
-                  mt: 3,
-                  p: 2,
-                  bgcolor: 'primary.light',
-                  borderRadius: 3,
-                  border: '1px solid',
-                  borderColor: 'primary.main',
-                }}
-              >
-                <Typography
-                  variant="caption"
-                  sx={{ color: 'primary.dark', fontWeight: 600 }}
-                >
-                  DPA COMPLIANCE
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ color: 'primary.dark', fontSize: '0.75rem', mt: 0.5 }}
-                >
-                  This platform adheres to Republic Act No. 10173 (Data Privacy
-                  Act of 2012).
-                </Typography>
-              </Box>
+                <NavButton
+                  icon={<PaymentsIcon />}
+                  label="Refund Policy"
+                  active={activeTab === 'refund'}
+                  hasDropdown
+                  isOpen={refundOpen}
+                  onClick={() => {
+                    setRefundOpen(!refundOpen);
+                    setConsentOpen(false);
+                  }}
+                />
+                <Collapse in={refundOpen} timeout="auto" unmountOnExit>
+                  <Stack spacing={0.5} sx={{ mt: 0.5, pl: 2, pb: 1 }}>
+                    <SubItem
+                      label="Booking Refunds"
+                      active={
+                        activeTab === 'refund' && refundType === 'booking'
+                      }
+                      onClick={() => handleRefundClick('booking')}
+                    />
+                    <SubItem
+                      label="Subscription Refunds"
+                      active={
+                        activeTab === 'refund' && refundType === 'subscription'
+                      }
+                      onClick={() => handleRefundClick('subscription')}
+                    />
+                  </Stack>
+                </Collapse>
+              </Stack>
             </Box>
           </Grid>
 
-          {/* right: Content Display */}
           <Grid size={{ xs: 12, md: 9 }}>
             <Paper
-              ref={scrollParentRef}
               sx={{
                 p: { xs: 3, md: 6 },
-                borderRadius: 4,
+                borderRadius: '16px',
                 border: '1px solid',
                 borderColor: 'outlineVariant',
-                minHeight: '600px',
-                // Markdown Styling
-                '& .markdown-body': {
+                boxShadow: 'none',
+                minHeight: '70vh',
+                '& .policy-inject': {
                   fontFamily: "'Poppins', sans-serif",
-                  '& h1': { fontSize: '1.8rem', fontWeight: 800, mb: 2 },
+                  '& h1': {
+                    fontSize: '2.2rem',
+                    fontWeight: 800,
+                    mb: 3,
+                    color: 'primary.main',
+                  },
                   '& h2': {
-                    fontSize: '1.4rem',
+                    fontSize: '1.5rem',
                     fontWeight: 700,
                     mt: 4,
                     mb: 2,
-                    color: 'primary.main',
+                    color: 'text.primary',
                   },
-                  '& p': { color: 'text.secondary', lineHeight: 1.8, mb: 2 },
+                  '& p': { lineHeight: 1.8, mb: 2, color: 'text.secondary' },
                   '& table': {
                     width: '100%',
                     borderCollapse: 'collapse',
                     my: 3,
-                    '& th, & td': {
-                      border: '1px solid',
-                      borderColor: 'outlineVariant',
-                      p: 1.5,
-                      textAlign: 'left',
-                      fontSize: '0.85rem',
-                    },
-                    '& th': { bgcolor: 'background.default' },
                   },
+                  '& th, & td': {
+                    border: '1px solid',
+                    borderColor: 'outlineVariant',
+                    p: 1.5,
+                  },
+                  '& th': { bgcolor: 'background.default' },
                 },
               }}
             >
-              <Box className="markdown-body">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {activeContent}
-                </ReactMarkdown>
-              </Box>
+              {isContentLoading ? (
+                <Typography
+                  sx={{ color: 'text.secondary', fontStyle: 'italic' }}
+                >
+                  Updating Legal Center...
+                </Typography>
+              ) : (
+                <Box
+                  className="policy-inject"
+                  dangerouslySetInnerHTML={{ __html: activeContent || '' }}
+                />
+              )}
             </Paper>
           </Grid>
         </Grid>
