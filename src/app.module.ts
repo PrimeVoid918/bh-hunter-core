@@ -34,6 +34,7 @@ import { AccountsModule } from './domains/accounts/accounts.module';
 import { MetricsModule } from './domains/metrics/metrics.module';
 import { SubscriptionsModule } from './domains/subscriptions/subscriptions.module';
 import { PoliciesModule } from './domains/policies/policies.module';
+import { AccessModule } from './domains/access/access.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { PoliciesModule } from './domains/policies/policies.module';
     MetricsModule,
     SubscriptionsModule,
     PoliciesModule,
+    AccessModule,
   ],
   controllers: [AppController],
   providers: [

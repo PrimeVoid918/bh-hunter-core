@@ -86,6 +86,7 @@ export class SubscriptionsController {
   //   return this.subscriptionsService.activatePaid(body);
   // }
 
+  //! should get all the subs for transaction
   // 🔹 Get all subscriptions of an owner
   @Get()
   findAll(@Query('ownerId') ownerId: string) {

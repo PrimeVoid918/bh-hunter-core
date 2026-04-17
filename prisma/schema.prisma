@@ -294,6 +294,8 @@ model BoardingHouse {
   rooms              Room[]
   Booking            Booking[]
   reviews            Review[]
+
+  // filter if owner is out of subs or trial
 }
 
 model Review {

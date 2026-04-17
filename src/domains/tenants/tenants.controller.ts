@@ -13,14 +13,12 @@ import {
 } from '@nestjs/common';
 import { TenantsService } from './tenants.service';
 import { CreateTenantDto } from './dto/create-tenant.dto';
-import { CreateTenantDoc, GetTenantDoc } from './tenants.swagger';
 import { UpdateTenantDto } from './dto/update-tenant.dto';
 import { FindTenantsDto } from './dto/find-tenants.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { createMulterConfig } from 'src/infrastructure/shared/utils/multer-config.util';
 import { CreateVerifcationDto } from '../verifications/dto/create-verifcation.dto';
 import { UpdateVerifcationDto } from '../verifications/dto/update-verifcation.dto';
-import { FindOneVerificationDto } from '../verifications/dto/findOne-verification.dto';
 @Controller('tenants')
 export class TenantsController {
   constructor(private readonly tenantsService: TenantsService) {}
