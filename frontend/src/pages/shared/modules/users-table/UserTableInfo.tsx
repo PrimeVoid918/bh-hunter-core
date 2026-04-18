@@ -103,8 +103,8 @@ export default function UserTableInfo({
               <InfoRow
                 label="Consent Accepted"
                 value={
-                  (rowData as FindOneOwner).consentAcceptedAt
-                    ? parseIsoDate((rowData as FindOneOwner).consentAcceptedAt)
+                  (rowData as FindOneOwner).policiesAcceptedAt
+                    ? parseIsoDate((rowData as FindOneOwner).policiesAcceptedAt)
                         ?.dateOnly
                     : 'No'
                 }
@@ -112,9 +112,7 @@ export default function UserTableInfo({
               <InfoRow
                 label="Legitimacy Consent"
                 value={
-                  (rowData as FindOneOwner).hasAcceptedLegitimacyConsent
-                    ? 'Yes'
-                    : 'No'
+                  (rowData as FindOneOwner).hasAcceptedPolicies ? 'Yes' : 'No'
                 }
               />
             </>

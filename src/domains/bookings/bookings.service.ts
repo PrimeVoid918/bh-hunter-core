@@ -56,10 +56,14 @@ export class BookingsService {
       throw new BadRequestException('Invalid occupants count');
     }
 
+    const now = new Date();
+
     const existingActiveBooking = await this.prisma.booking.findFirst({
       where: {
         tenantId: booking.tenantId,
         status: BookingStatus.COMPLETED_BOOKING,
+        checkInDate: { lte: now },
+        checkOutDate: { gte: now },
         isDeleted: false,
       },
       select: { id: true },
@@ -370,7 +374,37 @@ export class BookingsService {
     };
   }
 
+  async findActive(id: number) {
+    if (!id) {
+      throw new NotFoundException('No Tenant Id found');
+    }
+
+    const now = new Date();
+
+    const active = await this.prisma.booking.findFirst({
+      where: {
+        tenantId: id,
+        status: BookingStatus.COMPLETED_BOOKING,
+        checkInDate: { lte: now }, // started already
+        checkOutDate: { gte: now }, // not finished yet
+        isDeleted: false,
+      },
+      include: {
+        room: {
+          include: {
+            boardingHouse: true,
+          },
+        },
+      },
+    });
+
+    return active;
+  }
+
   async getBookingStatus(bookId: number) {
+    if (!bookId) {
+      throw new NotFoundException('Book ID is missing');
+    }
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookId },
       include: {

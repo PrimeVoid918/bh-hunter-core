@@ -191,54 +191,56 @@ datasource db {
 }
 
 model Tenant {
-  id                           Int                    @id @default(autoincrement())
-  username                     String                 @unique
-  firstname                    String?
-  lastname                     String?
-  email                        String                 @unique
-  password                     String
-  role                         UserRole               @default(TENANT) // changed
-  hasAcceptedLegitimacyConsent Boolean                @default(false)
-  consentAcceptedAt            DateTime?
-  isActive                     Boolean                @default(true)
-  registrationStatus           RegistrationStatus     @default(PENDING)
-  verificationLevel            VerificationLevel      @default(UNVERIFIED)
-  createdAt                    DateTime               @default(now())
-  updatedAt                    DateTime               @updatedAt
-  age                          Int?                   @default(0)
-  guardian                     String?
-  address                      String?
-  phone_number                 String?                @unique
-  isDeleted                    Boolean                @default(false)
-  deletedAt                    DateTime?
-  bookings                     Booking[]
-  verificationDocuments        VerificationDocument[]
-  reviews                      Review[]
+  id                    Int                    @id @default(autoincrement())
+  username              String                 @unique
+  firstname             String?
+  lastname              String?
+  email                 String                 @unique
+  password              String
+  role                  UserRole               @default(TENANT) // changed
+  hasAcceptedPolicies   Boolean                @default(false)
+  policiesAcceptedAt    DateTime?
+  policiesVersion       String? // NEW
+  isActive              Boolean                @default(true)
+  registrationStatus    RegistrationStatus     @default(PENDING)
+  verificationLevel     VerificationLevel      @default(UNVERIFIED)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  age                   Int?                   @default(0)
+  guardian              String?
+  address               String?
+  phone_number          String?                @unique
+  isDeleted             Boolean                @default(false)
+  deletedAt             DateTime?
+  bookings              Booking[]
+  verificationDocuments VerificationDocument[]
+  reviews               Review[]
 }
 
 model Owner {
-  id                           Int                    @id @default(autoincrement())
-  username                     String                 @unique
-  firstname                    String?
-  lastname                     String?
-  email                        String                 @unique
-  password                     String
-  role                         UserRole               @default(OWNER)
-  hasAcceptedLegitimacyConsent Boolean                @default(false)
-  consentAcceptedAt            DateTime?
-  isActive                     Boolean                @default(true)
-  registrationStatus           RegistrationStatus     @default(PENDING)
-  verificationLevel            VerificationLevel      @default(UNVERIFIED)
-  createdAt                    DateTime               @default(now())
-  updatedAt                    DateTime               @updatedAt
-  age                          Int?                   @default(0)
-  address                      String?
-  phone_number                 String?                @unique
-  boardingHouses               BoardingHouse[]
-  isDeleted                    Boolean                @default(false)
-  deletedAt                    DateTime?
-  verificationDocuments        VerificationDocument[] // permit relation
-  subscriptions                Subscription[]
+  id                    Int                    @id @default(autoincrement())
+  username              String                 @unique
+  firstname             String?
+  lastname              String?
+  email                 String                 @unique
+  password              String
+  role                  UserRole               @default(OWNER)
+  hasAcceptedPolicies   Boolean                @default(false)
+  policiesAcceptedAt    DateTime?
+  policiesVersion       String? // NEW
+  isActive              Boolean                @default(true)
+  registrationStatus    RegistrationStatus     @default(PENDING)
+  verificationLevel     VerificationLevel      @default(UNVERIFIED)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  age                   Int?                   @default(0)
+  address               String?
+  phone_number          String?                @unique
+  boardingHouses        BoardingHouse[]
+  isDeleted             Boolean                @default(false)
+  deletedAt             DateTime?
+  verificationDocuments VerificationDocument[] // permit relation
+  subscriptions         Subscription[]
 }
 
 model OwnerPayoutMethod {

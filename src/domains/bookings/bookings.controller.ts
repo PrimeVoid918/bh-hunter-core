@@ -104,6 +104,11 @@ export class BookingsController {
     return this.bookingsService.createBooking(+roomId, payload);
   }
 
+  @Get('tenant/:tenantId/active')
+  findActive(@Param('tenantId') id: string) {
+    return this.bookingsService.findActive(+id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.bookingsService.findOne(+id);
@@ -112,79 +117,5 @@ export class BookingsController {
   @Get()
   findAll(@Query() filter: FindAllBookingFilterDto) {
     return this.bookingsService.findAll(filter);
-  }
-
-  private refund_test({
-    test_val,
-  }: {
-    test_val:
-      | 'FULL'
-      | 'PARTIAL'
-      | 'NOT_REFUNDABLE'
-      | 'COMPLETED_BOOKING'
-      | 'AWAITING_PAYMENT';
-  }) {
-    switch (test_val) {
-      case 'PARTIAL':
-        return {
-          refundStatus: 'PARTIAL',
-          refundable: true,
-          percentage: 0.5,
-          refundAmount: '6000',
-          originalAmount: '12000',
-          currency: 'PHP',
-          checkInDate: '2026-04-14T10:00:00.000Z',
-          now: '2026-04-13T10:00:00.000Z',
-        };
-      case 'FULL':
-        return {
-          refundStatus: 'FULL',
-          refundable: true,
-          percentage: 1,
-          refundAmount: '12000',
-          originalAmount: '12000',
-          currency: 'PHP',
-          checkInDate: '2026-04-20T10:00:00.000Z',
-          now: '2026-04-12T10:00:00.000Z',
-        };
-      case 'NOT_REFUNDABLE':
-        return {
-          refundStatus: 'NOT_REFUNDABLE',
-          refundable: false,
-          percentage: 0,
-          refundAmount: '0',
-          originalAmount: '12000',
-          currency: 'PHP',
-          checkInDate: '2026-04-12T09:00:00.000Z',
-          now: '2026-04-12T10:00:00.000Z',
-        };
-      case 'COMPLETED_BOOKING':
-        return {
-          bookingId: 1,
-          bookingStatus: 'COMPLETED_BOOKING',
-          paymentStatus: 'PAID',
-          refund: {
-            eligible: true,
-            percentage: 0.5,
-            refundAmount: 6000,
-            totalAmount: 12000,
-            hoursBeforeCheckIn: 36,
-          },
-        };
-      case 'AWAITING_PAYMENT':
-        return {
-          bookingId: 1,
-          bookingStatus: 'AWAITING_PAYMENT',
-          paymentStatus: 'PENDING',
-          refund: null,
-        };
-      default:
-        return {
-          bookingId: 1,
-          bookingStatus: 'PENDING_REQUEST',
-          paymentStatus: null,
-          refund: null,
-        };
-    }
   }
 }

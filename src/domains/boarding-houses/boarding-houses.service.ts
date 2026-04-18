@@ -72,7 +72,11 @@ export class BoardingHousesService {
         },
         include: {
           location: true,
-          rooms: true,
+          rooms: {
+            where: {
+              isDeleted: false,
+            },
+          },
         },
       });
 
@@ -150,7 +154,11 @@ export class BoardingHousesService {
         where: { id },
         include: {
           location: true,
-          rooms: true,
+          rooms: {
+            where: {
+              isDeleted: false,
+            },
+          },
         },
       });
 

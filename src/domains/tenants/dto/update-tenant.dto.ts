@@ -59,9 +59,9 @@ export class UpdateTenantDto {
   // ✅ Fields you were missing
   @IsOptional()
   @IsBoolean()
-  hasAcceptedLegitimacyConsent?: boolean;
+  hasAcceptedPolicies?: boolean;
 
   @IsOptional()
   @IsDateString()
-  consentAcceptedAt?: string;
+  policiesAcceptedAt?: string;
 }

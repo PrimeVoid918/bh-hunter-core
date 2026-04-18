@@ -26,8 +26,9 @@ export const BaseUserSchema = z.object({
   age: z.number().int().optional(),
   address: z.string().optional(),
   phone_number: z.string().optional(),
-  hasAcceptedLegitimacyConsent: z.boolean().optional(),
-  consentAcceptedAt: z.string().datetime().optional(),
+  policiesAcceptedAt: z.coerce.date().nullable().optional(),
+  hasAcceptedPolicies: z.boolean().optional(),
+  policiesVersion: z.string().optional(),
   boardingHouses: z.array(z.object({ id: z.number() })).optional(),
 });
 

@@ -133,8 +133,8 @@ export class TenantsService {
         registrationStatus: true,
         createdAt: true,
         updatedAt: true,
-        hasAcceptedLegitimacyConsent: true,
-        consentAcceptedAt: true,
+        policiesAcceptedAt: true,
+        hasAcceptedPolicies: true,
       },
     });
 
@@ -238,7 +238,7 @@ export class TenantsService {
       'guardian',
       'address',
       'phone_number',
-      'hasAcceptedLegitimacyConsent',
+      'hasAcceptedPolicies',
       'isActive',
       'password',
     ];
@@ -259,8 +259,8 @@ export class TenantsService {
     }
 
     // Handle consentAcceptedAt automatically
-    if ('hasAcceptedLegitimacyConsent' in dataToUpdate) {
-      dataToUpdate.consentAcceptedAt = dataToUpdate.hasAcceptedLegitimacyConsent
+    if ('hasAcceptedPolicies' in dataToUpdate) {
+      dataToUpdate.policiesAcceptedAt = dataToUpdate.hasAcceptedPolicies
         ? new Date()
         : null;
     }

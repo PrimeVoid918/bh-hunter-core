@@ -56,7 +56,7 @@ export class AccessService {
     const ctx: OwnerPolicyContext = {
       verificationLevel: owner.verificationLevel,
       registrationStatus: owner.registrationStatus,
-      hasAcceptedLegitimacyConsent: owner.hasAcceptedLegitimacyConsent,
+      hasAcceptedPolicies: owner.hasAcceptedPolicies,
 
       subscriptionStatus: activeSubscription?.status ?? 'INACTIVE',
       trialActive:

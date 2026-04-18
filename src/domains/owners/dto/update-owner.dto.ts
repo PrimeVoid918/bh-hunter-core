@@ -18,10 +18,10 @@ export class UpdateOwnerDto extends PartialType(CreateOwnerDto) {
 
   @IsOptional()
   @IsBoolean()
-  hasAcceptedLegitimacyConsent?: boolean;
+  hasAcceptedPolicies?: boolean;
 
   @IsOptional()
   @Type(() => Date)
   @IsDate()
-  consentAcceptedAt?: Date;
+  policiesAcceptedAt?: Date;
 }

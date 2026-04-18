@@ -20,7 +20,9 @@ export interface OwnerPolicyContext {
   verificationLevel: 'UNVERIFIED' | 'PROFILE_ONLY' | 'FULLY_VERIFIED';
   registrationStatus: 'PENDING' | 'COMPLETED';
 
-  hasAcceptedLegitimacyConsent: boolean;
+  hasAcceptedPolicies: boolean;
+  // policiesAcceptedAt: string;
+  // policiesVersion: string;
 
   subscriptionStatus?: 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'INACTIVE';
   trialActive?: boolean;

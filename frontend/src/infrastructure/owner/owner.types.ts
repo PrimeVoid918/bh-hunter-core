@@ -63,8 +63,9 @@ export const FindOneOwnerSchema = BaseUserSchema.extend({
   address: z.string().nullable().optional(),
   phone_number: z.string().nullable().optional(),
 
-  consentAcceptedAt: z.coerce.date().nullable().optional(),
-  hasAcceptedLegitimacyConsent: z.boolean(),
+  policiesAcceptedAt: z.coerce.date().nullable().optional(),
+  hasAcceptedPolicies: z.boolean(),
+  policiesVersion: z.string().optional(),
 
   boardingHouses: z.array(BoardingHouseSchema),
 

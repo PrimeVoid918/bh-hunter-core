@@ -80,6 +80,8 @@ export class ReviewsService {
           tenant: {
             select: {
               username: true,
+              firstname: true,
+              lastname: true,
             },
           },
         },

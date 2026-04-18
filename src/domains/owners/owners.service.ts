@@ -133,8 +133,8 @@ export class OwnersService {
         age: true,
         address: true,
         phone_number: true,
-        consentAcceptedAt: true,
-        hasAcceptedLegitimacyConsent: true,
+        policiesAcceptedAt: true,
+        hasAcceptedPolicies: true,
         boardingHouses: {
           select: { id: true },
         },
@@ -659,8 +659,8 @@ export class OwnersService {
       'address',
       'phone_number',
       'isActive',
-      'consentAcceptedAt',
-      'hasAcceptedLegitimacyConsent',
+      'policiesAcceptedAt',
+      'hasAcceptedPolicies',
     ];
 
     const dataToUpdate = Object.fromEntries(
