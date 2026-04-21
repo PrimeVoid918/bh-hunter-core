@@ -17,11 +17,6 @@ import { OwnersService } from '../owners/owners.service';
 import { CreateOwnerDto } from '../owners/dto/create-owner.dto';
 import { AdminsPublisher } from './events/admins.publisher';
 
-/*
- *
- *
- */
-
 @Injectable()
 export class AdminsService {
   constructor(

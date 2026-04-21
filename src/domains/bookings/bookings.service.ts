@@ -755,13 +755,6 @@ export class BookingsService {
       throw new NotFoundException('Booking not found');
     }
 
-    if (
-      booking.status === BookingStatus.REFUNDED_PAYMENT ||
-      booking.status === BookingStatus.CANCELLED_BOOKING
-    ) {
-      return booking;
-    }
-
     const { userId, role } = payload;
 
     if (role === 'TENANT' && booking.tenantId !== userId) {
@@ -776,20 +769,30 @@ export class BookingsService {
       );
     }
 
-    const updated = await this.prisma.booking.update({
+    // Catch-up protection:
+    // if already refunded/cancelled but slot somehow was not released yet, release it once
+    if (
+      (booking.status === BookingStatus.REFUNDED_PAYMENT ||
+        booking.status === BookingStatus.CANCELLED_BOOKING) &&
+      booking.occupancyReleased
+    ) {
+      return booking;
+    }
+
+    const shouldReleaseOccupancy =
+      booking.status === BookingStatus.COMPLETED_BOOKING &&
+      !booking.occupancyReleased;
+
+    let finalBooking = await this.prisma.booking.update({
       where: { id: bookId },
       data: {
-        status: 'CANCELLED_BOOKING',
+        status: BookingStatus.CANCELLED_BOOKING,
         ownerMessage: role === 'OWNER' ? payload.reason : booking.ownerMessage,
         tenantMessage:
           role === 'TENANT' ? payload.reason : booking.tenantMessage,
         updatedAt: new Date(),
       },
     });
-
-    /**
-     * Only check refunds if booking was completed
-     */
 
     const payment = await this.prisma.payment.findFirst({
       where: {
@@ -799,39 +802,12 @@ export class BookingsService {
       orderBy: { createdAt: 'desc' },
     });
 
-    console.log('Refund payment found:', payment);
-
-    if (!payment) {
-      return updated;
-    }
-
-    /**
-     * REFUND LOGIC
-     */
-
-    if (payment && payment.status === PaymentStatus.PAID) {
-      // if (new Date() >= booking.checkInDate) {
-      //   return updated;
-      // }
-      if (new Date() >= booking.checkInDate) {
-        // optionally log or mark explicitly
-        console.log('No refund: past check-in');
-        return updated;
-      }
-
+    if (payment && new Date() < booking.checkInDate) {
       const policy = this.refundPolicy.calculate(
         booking.checkInDate,
         new Date(),
       );
-
       const percentage = policy.percentage;
-
-      console.log('REFUND DEBUG', {
-        now: new Date(),
-        checkInDate: booking.checkInDate,
-        nowTimestamp: Date.now(),
-        checkInTimestamp: booking.checkInDate.getTime(),
-      });
 
       if (percentage > 0) {
         const refundAmount = payment.amount.mul(percentage);
@@ -843,19 +819,66 @@ export class BookingsService {
           paymongoReason: 'requested_by_customer',
         });
 
-        await this.prisma.booking.update({
+        finalBooking = await this.prisma.booking.update({
           where: { id: bookId },
           data: { status: BookingStatus.REFUNDED_PAYMENT },
         });
       }
     }
 
+    // Release occupied slot if this booking had already consumed one
+    if (shouldReleaseOccupancy) {
+      await this.prisma.$transaction(async (tx) => {
+        const room = await tx.room.findUnique({
+          where: { id: booking.roomId },
+        });
+
+        if (!room) return;
+
+        const nextCapacity = Math.max(
+          room.currentCapacity - (booking.occupantsCount || 1),
+          0,
+        );
+
+        const nextAvailability = nextCapacity < room.maxCapacity;
+
+        await tx.room.update({
+          where: { id: room.id },
+          data: {
+            currentCapacity: nextCapacity,
+            availabilityStatus: nextAvailability,
+          },
+        });
+
+        await tx.roomAvailabilityLog.create({
+          data: {
+            roomId: room.id,
+            status: nextAvailability,
+            reason: `Auto-release after cancellation/refund of booking ${booking.reference}`,
+          },
+        });
+
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: {
+            occupancyReleased: true,
+            occupancyReleasedAt: new Date(),
+          },
+        });
+      });
+
+      finalBooking = await this.prisma.booking.findUniqueOrThrow({
+        where: { id: bookId },
+      });
+    }
+
     this.bookingEventPublisher.cancelled({
       bookingId: bookId,
       ownerId: booking.room.boardingHouse.ownerId,
-      tenantId: updated.tenantId,
+      tenantId: booking.tenantId,
+      reason: payload.reason,
       data: {
-        tenantId: updated.tenantId,
+        tenantId: booking.tenantId,
         ownerId: booking.room.boardingHouse.ownerId,
         bhId: booking.boardingHouseId,
         roomId: booking.roomId,
@@ -863,7 +886,7 @@ export class BookingsService {
       },
     });
 
-    return updated;
+    return finalBooking;
   }
 
   async remove(id: number) {

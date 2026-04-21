@@ -4,9 +4,17 @@ import { ApiResponseType } from '../common/types/backend-reponse.type';
 import { Admin } from './admin.types';
 import { ownerEndpoints, tenantEndpoints } from './configs';
 
+import {
+  adminTransactionsSchema,
+  adminTransactionMetaDataSchema,
+  adminTransactionStatsSchema,
+  AdminTransactionMetaData,
+  AdminTransactionStats,
+} from './admin.types';
+
 const adminApiRoute = `/admins`;
 export const adminApi = createApi({
-  tagTypes: ['Admin', 'Tenant', 'Owner'],
+  tagTypes: ['Admin', 'Tenant', 'Owner', 'AdminTransaction'],
   reducerPath: 'adminsApi',
   baseQuery: fetchBaseQuery({
     baseUrl: BACKEND_API,
@@ -30,6 +38,51 @@ export const adminApi = createApi({
       transformResponse: (response: ApiResponseType<Admin>) =>
         response.results ?? null,
       providesTags: (result, error, id) => [{ type: 'Admin', id }],
+    }),
+    getTransactions: builder.query<AdminTransactionMetaData[], void>({
+      query: () => `${adminApiRoute}/transactions`,
+      transformResponse: (
+        response: ApiResponseType<unknown>,
+      ): AdminTransactionMetaData[] =>
+        adminTransactionsSchema.parse(response.results ?? []),
+      providesTags: (result) =>
+        result
+          ? [
+              ...result.map((item) => ({
+                type: 'AdminTransaction' as const,
+                id: item.id,
+              })),
+              { type: 'AdminTransaction' as const, id: 'LIST' },
+            ]
+          : [{ type: 'AdminTransaction' as const, id: 'LIST' }],
+    }),
+
+    getTransaction: builder.query<AdminTransactionMetaData | null, number>({
+      query: (id) => `${adminApiRoute}/transactions/${id}`,
+      transformResponse: (
+        response: ApiResponseType<unknown>,
+      ): AdminTransactionMetaData | null => {
+        if (!response.results) return null;
+        return adminTransactionMetaDataSchema.parse(response.results);
+      },
+      providesTags: (_result, _error, id) => [{ type: 'AdminTransaction', id }],
+    }),
+
+    getTransactionStats: builder.query<AdminTransactionStats, void>({
+      query: () => `${adminApiRoute}/transactions/stats`,
+      transformResponse: (
+        response: ApiResponseType<unknown>,
+      ): AdminTransactionStats =>
+        adminTransactionStatsSchema.parse(
+          response.results ?? {
+            total: 0,
+            paid: 0,
+            pending: 0,
+            failed: 0,
+            refunded: 0,
+          },
+        ),
+      providesTags: [{ type: 'AdminTransactionStats', id: 'SUMMARY' }],
     }),
     create: builder.mutation<Admin, Partial<Admin>>({
       query: (data) => ({
@@ -64,6 +117,9 @@ export const adminApi = createApi({
 export const {
   useGetAllQuery,
   useGetOneQuery,
+  useGetTransactionQuery,
+  useGetTransactionStatsQuery,
+  useGetTransactionsQuery,
   useCreateMutation,
   usePatchMutation,
   useDeleteMutation,

@@ -29,6 +29,7 @@ import {
   People as UsersIcon,
   Assignment as LogsIcon,
   AccountCircle,
+  ReceiptLong,
 } from '@mui/icons-material';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -133,6 +134,11 @@ export default function AdminSidebarLayout() {
       ],
     },
     { name: 'Logs', icon: <LogsIcon />, link: '/admin/logs' },
+    {
+      name: 'Transactions',
+      icon: <ReceiptLong />,
+      link: '/admin/transactions',
+    },
   ];
 
   const drawerContent = (

@@ -1,5 +1,6 @@
 import DashboardNavigator from '../dashboard/navigation/dashboard.navigator';
 import LogsNavigator from '../logs/navigation/logs.navigator';
+import TransactionsNavigator from '../transactions/navigation/transactions.navigator';
 import UsersNavigator from '../users/navigation/users.navigator';
 import ValidationNavigator from '../validation/navigation/validation.navigator';
 import AdminsSidebarLayout from './admins.sidebar-layout';
@@ -14,6 +15,7 @@ export default function AdminNavigator() {
       { ...ValidationNavigator() },
       { ...UsersNavigator() },
       { ...LogsNavigator() },
+      { ...TransactionsNavigator() },
     ],
   };
 }
