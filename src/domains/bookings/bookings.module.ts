@@ -16,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { AccountsModule } from '../accounts/accounts.module';
 import { SharedModule } from 'src/infrastructure/shared/shared.module';
 import { RefundPolicy } from './refund.policy';
+import { Logger } from 'src/common/logger/logger.service';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { RefundPolicy } from './refund.policy';
     SharedModule,
   ],
   controllers: [BookingsController],
-  providers: [BookingEventPublisher, BookingsService, RefundPolicy],
+  providers: [BookingEventPublisher, BookingsService, RefundPolicy, Logger],
   exports: [BookingsService, BookingEventPublisher],
 })
 export class BookingsModule {}

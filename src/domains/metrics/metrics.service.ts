@@ -173,13 +173,23 @@ export class MetricsService {
       if (role === 'TENANT') baseWhere.userId = userId;
     }
 
+    const paidCompletedWhere = {
+      ...baseWhere,
+      status: 'PAID',
+      booking: {
+        is: {
+          status: 'COMPLETED_BOOKING',
+        },
+      },
+    };
+
     const [totalPayments, paidPayments, revenue, paymentStatuses] =
       await Promise.all([
         prisma.payment.count({ where: baseWhere }),
-        prisma.payment.count({ where: { ...baseWhere, status: 'PAID' } }),
+        prisma.payment.count({ where: paidCompletedWhere }),
         prisma.payment.aggregate({
           _sum: { amount: true },
-          where: { ...baseWhere, status: 'PAID' },
+          where: paidCompletedWhere,
         }),
         prisma.payment.groupBy({
           by: ['status'],
@@ -191,6 +201,8 @@ export class MetricsService {
     return {
       totalPayments,
       paidPayments,
+      // NOTE: this is gross paid booking payments, not net revenue
+      // revenue: grossPaidBookingPayments._sum.amount || 0,
       revenue: revenue._sum.amount || 0,
       statusCounts: paymentStatuses,
     };

@@ -326,32 +326,34 @@ model Location {
 }
 
 model Booking {
-  id              Int           @id @default(autoincrement())
-  reference       String        @unique // e.g. BK-20251023-XXXX
-  tenantId        Int
-  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  roomId          Int
-  room            Room          @relation(fields: [roomId], references: [id])
-  boardingHouseId Int
-  boardingHouse   BoardingHouse @relation(fields: [boardingHouseId], references: [id])
-  bookingType     BookingType   @default(RESERVATION)
-  occupantsCount  Int           @default(1) // tracking
-  dateBooked      DateTime
-  checkInDate     DateTime
-  checkOutDate    DateTime
-  status          BookingStatus @default(PENDING_REQUEST)
-  paymentProofId  Int? // uploaded receipt / image URL
-  totalAmount     Decimal?      @db.Decimal(10, 2)
-  currency        CurrencyType  @default(PHP)
-  ownerMessage    String?
-  tenantMessage   String?
-  expiresAt       DateTime? // e.g. if pending payment, expiry to auto-cancel
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  isDeleted       Boolean       @default(false)
-  deletedAt       DateTime?
-  payments        Payment[]
-  paymentId       Int?
+  id                  Int           @id @default(autoincrement())
+  reference           String        @unique // e.g. BK-20251023-XXXX
+  tenantId            Int
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  roomId              Int
+  room                Room          @relation(fields: [roomId], references: [id])
+  boardingHouseId     Int
+  boardingHouse       BoardingHouse @relation(fields: [boardingHouseId], references: [id])
+  bookingType         BookingType   @default(RESERVATION)
+  occupantsCount      Int           @default(1) // tracking
+  dateBooked          DateTime
+  checkInDate         DateTime
+  checkOutDate        DateTime
+  occupancyReleased   Boolean       @default(false)
+  occupancyReleasedAt DateTime?
+  status              BookingStatus @default(PENDING_REQUEST)
+  paymentProofId      Int? // uploaded receipt / image URL
+  totalAmount         Decimal?      @db.Decimal(10, 2)
+  currency            CurrencyType  @default(PHP)
+  ownerMessage        String?
+  tenantMessage       String?
+  expiresAt           DateTime? // e.g. if pending payment, expiry to auto-cancel
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  isDeleted           Boolean       @default(false)
+  deletedAt           DateTime?
+  payments            Payment[]
+  paymentId           Int?
 }
 
 model Payment {

@@ -46,36 +46,65 @@ async function seed() {
     console.log('[====] Seeding Super Admin...');
 
     // Read from .env
-    const username = process.env.ADMIN_USERNAME!;
-    const firstname = process.env.ADMIN_FIRSTNAME!;
-    const lastname = process.env.ADMIN_LASTNAME!;
-    const email = process.env.ADMIN_EMAIL!;
-    const passwordPlain = process.env.ADMIN_PASSWORD!;
-    const role = (process.env.ADMIN_ROLE as UserRole) || UserRole.ADMIN;
-    const address = process.env.ADMIN_ADDRESS!;
-    const phone_number = process.env.ADMIN_PHONE_NUMBER!;
-    const age = Number(process.env.ADMIN_AGE!);
-    const isVerified = process.env.ADMIN_IS_VERIFIED === 'true';
+    const username1 = process.env.ADMIN_USERNAME1!;
+    const firstname1 = process.env.ADMIN_FIRSTNAME1!;
+    const lastname1 = process.env.ADMIN_LASTNAME1!;
+    const email1 = process.env.ADMIN_EMAIL1!;
+    const passwordPlain1 = process.env.ADMIN_PASSWORD1!;
+    const role1 = (process.env.ADMIN_ROLE1 as UserRole) || UserRole.ADMIN;
+    const address1 = process.env.ADMIN_ADDRESS1!;
+    const phone_number1 = process.env.ADMIN_PHONE_NUMBER1!;
+    const age1 = Number(process.env.ADMIN_AGE1!);
+    const isVerified1 = process.env.ADMIN_IS_VERIFIED1 === 'true';
+
+    const username2 = process.env.ADMIN_USERNAME2!;
+    const firstname2 = process.env.ADMIN_FIRSTNAME2!;
+    const lastname2 = process.env.ADMIN_LASTNAME2!;
+    const email2 = process.env.ADMIN_EMAIL2!;
+    const passwordPlain2 = process.env.ADMIN_PASSWORD2!;
+    const role2 = (process.env.ADMIN_ROLE2 as UserRole) || UserRole.ADMIN;
+    const address2 = process.env.ADMIN_ADDRESS2!;
+    const phone_number2 = process.env.ADMIN_PHONE_NUMBER2!;
+    const age2 = Number(process.env.ADMIN_AGE2!);
+    const isVerified2 = process.env.ADMIN_IS_VERIFIED2 === 'true';
 
     // Hash password
 
     const cryptoService = new CryptoService();
-    const hashedPassword = await cryptoService.hashPassword(passwordPlain);
+    const hashedPassword1 = await cryptoService.hashPassword(passwordPlain1);
+    const hashedPassword2 = await cryptoService.hashPassword(passwordPlain2);
 
     await prisma.admin.upsert({
-      where: { email },
+      where: { email: email1 },
       update: {},
       create: {
-        username,
-        firstname,
-        lastname,
-        email,
-        password: hashedPassword,
-        role,
-        address,
-        phone_number,
-        age,
-        isVerified,
+        username: username1,
+        firstname: firstname1,
+        lastname: lastname1,
+        email: email1,
+        password: hashedPassword1,
+        role: role1,
+        address: address1,
+        phone_number: phone_number1,
+        age: age1,
+        isVerified: isVerified1,
+      },
+    });
+
+    await prisma.admin.upsert({
+      where: { email: email2 },
+      update: {},
+      create: {
+        username: username2,
+        firstname: firstname2,
+        lastname: lastname2,
+        email: email2,
+        password: hashedPassword2,
+        role: role2,
+        address: address2,
+        phone_number: phone_number2,
+        age: age2,
+        isVerified: isVerified2,
       },
     });
 

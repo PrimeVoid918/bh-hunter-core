@@ -7,6 +7,7 @@ export const BOOKING_EVENTS = {
   REJECTED: 'booking.rejected',
   CANCELLED: 'booking.cancelled',
   COMPLETED: 'booking.completed',
+  ENDED: 'booking.ended',
 } as const;
 
 export interface BookingDataPayload {
@@ -58,5 +59,12 @@ export type BookingCompletedPayload = {
   tenantId: number;
   ownerId: number;
   reason?: string;
+  data: BookingDataPayload;
+};
+
+export type BookingEndedPayload = {
+  bookingId: number;
+  tenantId: number;
+  ownerId: number;
   data: BookingDataPayload;
 };

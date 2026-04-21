@@ -9,6 +9,7 @@ import {
   BookingRejectedPayload,
   BookingCancelledPayload,
   BookingCompletedPayload,
+  BookingEndedPayload,
 } from 'src/domains/bookings/events/bookings.events';
 import { NotificationType, ResourceType, UserRole } from '@prisma/client';
 
@@ -197,5 +198,39 @@ export class BookingListener {
     ]);
 
     // this.notificationEmitter.notifyUser(payload.data.tenantId, notification);
+  }
+
+  @OnEvent(BOOKING_EVENTS.ENDED)
+  async handleBookingEnded(payload: BookingEndedPayload) {
+    await Promise.all([
+      this.notificationsService.create({
+        recipientRole: UserRole.TENANT,
+        recipientId: payload.data.tenantId,
+        type: NotificationType.SYSTEM,
+        title: 'Booking Ended',
+        message: 'Your stay has ended based on the recorded checkout date.',
+        entityType: ResourceType.BOOKING,
+        entityId: payload.bookingId,
+        data: {
+          ...payload.data,
+          bookingId: payload.bookingId,
+        },
+      }),
+
+      this.notificationsService.create({
+        recipientRole: UserRole.OWNER,
+        recipientId: payload.data.ownerId,
+        type: NotificationType.SYSTEM,
+        title: 'Booking Ended',
+        message:
+          'A booking has ended and the room slot was released automatically.',
+        entityType: ResourceType.BOOKING,
+        entityId: payload.bookingId,
+        data: {
+          ...payload.data,
+          bookingId: payload.bookingId,
+        },
+      }),
+    ]);
   }
 }

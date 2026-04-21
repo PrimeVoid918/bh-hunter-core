@@ -65,11 +65,51 @@ export class PaymentsService {
         room: { include: { boardingHouse: true } },
       },
     });
-    if (!booking) throw new NotFoundException('Booking not found');
-    if (booking.status !== 'AWAITING_PAYMENT')
-      throw new BadRequestException('Booking is not awaiting payment');
 
-    // Create payment record
+    if (!booking) throw new NotFoundException('Booking not found');
+
+    if (
+      booking.status !== BookingStatus.AWAITING_PAYMENT &&
+      booking.status !== BookingStatus.PAYMENT_FAILED
+    ) {
+      throw new BadRequestException(
+        `Booking cannot be paid in status: ${booking.status}`,
+      );
+    }
+
+    if (booking.status === BookingStatus.PAYMENT_FAILED) {
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: BookingStatus.AWAITING_PAYMENT },
+      });
+    }
+
+    // If this is a retry after a failed payment, reopen payment flow
+    if (booking.status === BookingStatus.PAYMENT_FAILED) {
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: BookingStatus.AWAITING_PAYMENT,
+        },
+      });
+    }
+
+    // Optional cleanup:
+    // mark previous unfinished payment attempts as expired so history stays cleaner
+    await this.prisma.payment.updateMany({
+      where: {
+        bookingId: booking.id,
+        purchaseType: PurchaseType.ROOM_BOOKING,
+        status: {
+          in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+        },
+      },
+      data: {
+        status: PaymentStatus.EXPIRED,
+      },
+    });
+
+    // Create fresh payment record for this retry
     const payment = await this.prisma.payment.create({
       data: {
         userId: booking.tenantId,
@@ -86,7 +126,7 @@ export class PaymentsService {
 
     const intent = await this.provider.createPaymentIntent(payment);
 
-    // update payment with provider info
+    // Update payment with provider info
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: {
@@ -95,7 +135,6 @@ export class PaymentsService {
       },
     });
 
-    // return client secret for RN app to confirm payment in-app
     return {
       paymentId: payment.id,
       clientSecret: intent.clientSecret!,
@@ -110,9 +149,38 @@ export class PaymentsService {
 
     if (!booking) throw new NotFoundException('Booking not found');
 
-    //!! possible rety route, by detecting a retry status
-    if (booking.status !== 'AWAITING_PAYMENT')
-      throw new BadRequestException('Booking is not awaiting payment');
+    if (
+      booking.status !== BookingStatus.AWAITING_PAYMENT &&
+      booking.status !== BookingStatus.PAYMENT_FAILED
+    ) {
+      throw new BadRequestException(
+        `Booking cannot be paid in status: ${booking.status}`,
+      );
+    }
+
+    // Reopen payment if this is a retry
+    if (booking.status === BookingStatus.PAYMENT_FAILED) {
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: {
+          status: BookingStatus.AWAITING_PAYMENT,
+        },
+      });
+    }
+
+    // Expire unfinished previous attempts so history stays cleaner
+    await this.prisma.payment.updateMany({
+      where: {
+        bookingId: booking.id,
+        purchaseType: PurchaseType.ROOM_BOOKING,
+        status: {
+          in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+        },
+      },
+      data: {
+        status: PaymentStatus.EXPIRED,
+      },
+    });
 
     const payment = await this.prisma.payment.create({
       data: {

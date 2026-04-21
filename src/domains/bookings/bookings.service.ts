@@ -13,6 +13,7 @@ import {
   Prisma,
   PaymentStatus,
   RefundStatus,
+  CurrencyType,
 } from '@prisma/client';
 
 import {
@@ -29,6 +30,7 @@ import { UserUnionService } from '../auth/userUnion.service';
 import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
 import { RefundPolicy } from './refund.policy';
+import { Logger } from 'src/common/logger/logger.service';
 
 /**
  * TODO: to do, owner cannot accept or do anything on the bookings if they ran out of subs
@@ -43,6 +45,7 @@ export class BookingsService {
     private readonly imageService: ImageService,
     private readonly bookingEventPublisher: BookingEventPublisher,
     private readonly refundPolicy: RefundPolicy,
+    private readonly logger: Logger,
   ) {}
 
   private get prisma() {
@@ -57,6 +60,10 @@ export class BookingsService {
     }
 
     const now = new Date();
+
+    if (booking.startDate <= now) {
+      throw new BadRequestException('Check-in date must be in the future');
+    }
 
     const existingActiveBooking = await this.prisma.booking.findFirst({
       where: {
@@ -91,7 +98,6 @@ export class BookingsService {
       throw new NotFoundException(`Room ${roomId} not found`);
     }
 
-    // Capacity validation
     if (room.currentCapacity + occupants > room.maxCapacity) {
       throw new BadRequestException(
         `Room capacity exceeded. Available slots: ${
@@ -99,6 +105,8 @@ export class BookingsService {
         }`,
       );
     }
+
+    const totalAmount = new Prisma.Decimal(room.price).mul(occupants);
 
     const bookingResult = await this.prisma.booking.create({
       data: {
@@ -115,6 +123,9 @@ export class BookingsService {
         dateBooked: new Date(),
 
         status: BookingStatus.PENDING_REQUEST,
+        totalAmount,
+        currency: CurrencyType.PHP,
+        tenantMessage: booking.note ?? null,
       },
       include: {
         tenant: {
@@ -381,24 +392,53 @@ export class BookingsService {
 
     const now = new Date();
 
-    const active = await this.prisma.booking.findFirst({
-      where: {
-        tenantId: id,
-        status: BookingStatus.COMPLETED_BOOKING,
-        checkInDate: { lte: now }, // started already
-        checkOutDate: { gte: now }, // not finished yet
-        isDeleted: false,
-      },
-      include: {
-        room: {
-          include: {
-            boardingHouse: true,
-          },
+    const [active, upcoming] = await Promise.all([
+      this.prisma.booking.findFirst({
+        where: {
+          tenantId: id,
+          status: BookingStatus.COMPLETED_BOOKING,
+          checkInDate: { lte: now },
+          checkOutDate: { gte: now },
+          isDeleted: false,
         },
-      },
-    });
+        include: {
+          room: {
+            include: {
+              boardingHouse: true,
+            },
+          },
+          boardingHouse: true,
+        },
+        orderBy: {
+          checkInDate: 'asc',
+        },
+      }),
 
-    return active;
+      this.prisma.booking.findFirst({
+        where: {
+          tenantId: id,
+          status: BookingStatus.COMPLETED_BOOKING,
+          checkInDate: { gt: now },
+          isDeleted: false,
+        },
+        include: {
+          room: {
+            include: {
+              boardingHouse: true,
+            },
+          },
+          boardingHouse: true,
+        },
+        orderBy: {
+          checkInDate: 'asc',
+        },
+      }),
+    ]);
+
+    return {
+      active,
+      upcoming,
+    };
   }
 
   async getBookingStatus(bookId: number) {
@@ -494,19 +534,24 @@ export class BookingsService {
 
     const now = new Date();
 
-    if (now >= booking.checkInDate) {
-      return {
-        refundStatus: RefundStatus.NOT_REFUNDABLE,
-        refundable: false,
-        percentage: 0,
-        refundAmount: '0',
-        reason: 'Past check-in date',
-      };
-    }
+    // if (now >= booking.checkInDate) {
+    //   return {
+    //     refundStatus: RefundStatus.NOT_REFUNDABLE,
+    //     refundable: false,
+    //     percentage: 0,
+    //     refundAmount: '0',
+    //     reason: 'Past check-in date',
+    //   };
+    // }
 
     // const percentage = this.calculateRefundPercentage(booking.checkInDate);
     // const psercentage = this.re(booking.checkInDate, new Date());
-    const policy = this.refundPolicy.calculate(booking.checkInDate, new Date());
+    // const policy = this.refundPolicy.calculate(booking.checkInDate, new Date());
+    const policy = this.refundPolicy.calculate(
+      booking.checkInDate,
+      new Date(),
+      booking.createdAt,
+    );
     const percentage = policy.percentage;
 
     let refundStatus: RefundStatus;
@@ -765,7 +810,12 @@ export class BookingsService {
      */
 
     if (payment && payment.status === PaymentStatus.PAID) {
+      // if (new Date() >= booking.checkInDate) {
+      //   return updated;
+      // }
       if (new Date() >= booking.checkInDate) {
+        // optionally log or mark explicitly
+        console.log('No refund: past check-in');
         return updated;
       }
 
@@ -894,6 +944,96 @@ export class BookingsService {
     }
 
     return expiredBookings.length;
+  }
+
+  async releaseEndedBookingSlots() {
+    const now = new Date();
+
+    const expiredBookings = await this.prisma.booking.findMany({
+      where: {
+        status: BookingStatus.COMPLETED_BOOKING,
+        checkOutDate: { lte: now },
+        occupancyReleased: false,
+        isDeleted: false,
+      },
+      include: {
+        room: true,
+        boardingHouse: true,
+      },
+    });
+
+    if (!expiredBookings.length) return 0;
+
+    let processedCount = 0;
+
+    for (const booking of expiredBookings) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const room = await tx.room.findUnique({
+            where: { id: booking.roomId },
+          });
+
+          if (!room) return;
+
+          const nextCapacity = Math.max(
+            room.currentCapacity - (booking.occupantsCount || 1),
+            0,
+          );
+
+          const nextAvailability = nextCapacity < room.maxCapacity;
+
+          await tx.room.update({
+            where: { id: room.id },
+            data: {
+              currentCapacity: nextCapacity,
+              availabilityStatus: nextAvailability,
+            },
+          });
+
+          await tx.roomAvailabilityLog.create({
+            data: {
+              roomId: room.id,
+              status: nextAvailability,
+              reason: `Auto-release after booking ${booking.reference} checkout`,
+            },
+          });
+
+          await tx.booking.update({
+            where: { id: booking.id },
+            data: {
+              occupancyReleased: true,
+              occupancyReleasedAt: now,
+            },
+          });
+        });
+
+        this.bookingEventPublisher.ended({
+          bookingId: booking.id,
+          tenantId: booking.tenantId,
+          ownerId: +booking.boardingHouse.ownerId,
+          data: {
+            resourceType: 'BOOKING',
+            ownerId: +booking.boardingHouse.ownerId,
+            tenantId: booking.tenantId,
+            roomId: booking.roomId,
+            bhId: booking.boardingHouseId,
+          },
+        });
+
+        processedCount += 1;
+
+        this.logger.log(
+          `Released occupancy for booking ${booking.reference} (room ${booking.roomId})`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed releasing booking ${booking.reference}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+
+    return processedCount;
   }
 
   public async confirmBookingPayment(bookingId: number) {

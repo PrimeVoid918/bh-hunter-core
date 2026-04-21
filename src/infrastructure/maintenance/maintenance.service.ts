@@ -16,4 +16,13 @@ export class MaintenanceService {
 
     this.logger.log(`Cancelled ${count} expired bookings`);
   }
+
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async handleEndedBookings() {
+    this.logger.log('Checking completed bookings past checkout...');
+
+    const count = await this.bookingsService.releaseEndedBookingSlots();
+
+    this.logger.log(`Released slots for ${count} ended bookings`);
+  }
 }
