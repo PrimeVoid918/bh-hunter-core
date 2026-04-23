@@ -18,6 +18,7 @@ import {
   BookingChargeType,
   PurchaseType,
   BookingChargeStatus,
+  BookingExtensionStatus,
 } from '@prisma/client';
 
 import {
@@ -27,6 +28,9 @@ import {
   PatchBookingRejectionPayloadDTO,
   FindAllBookingFilterDto,
   CancelBookingDto,
+  RejectExtensionDto,
+  ApproveExtensionDto,
+  RequestExtensionDto,
 } from './dto/dtos';
 import { ImageService } from 'src/infrastructure/image/image.service';
 import { ResourceType } from 'src/infrastructure/file-upload/types/resources-types';
@@ -515,51 +519,36 @@ export class BookingsService {
       },
     });
 
-    if (!booking) throw new NotFoundException('Booking not found');
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
 
-    const payment = await this.prisma.payment.findFirst({
-      where: {
-        bookingId: bookId,
-        status: PaymentStatus.PAID,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const paidPayments = await this.getPaidChargePaymentsForBooking(bookId);
 
-    // No payment → nothing to refund
-    if (!payment) {
+    if (!paidPayments.length) {
       return {
         refundStatus: RefundStatus.NONE,
         refundable: false,
         percentage: 0,
         refundAmount: '0',
-        reason: 'No payment found',
+        originalAmount: '0',
+        currency: booking.currency,
+        reason: 'No paid booking charges found',
+        checkInDate: booking.checkInDate,
+        now: new Date(),
       };
     }
 
     const now = new Date();
-
-    // if (now >= booking.checkInDate) {
-    //   return {
-    //     refundStatus: RefundStatus.NOT_REFUNDABLE,
-    //     refundable: false,
-    //     percentage: 0,
-    //     refundAmount: '0',
-    //     reason: 'Past check-in date',
-    //   };
-    // }
-
-    // const percentage = this.calculateRefundPercentage(booking.checkInDate);
-    // const psercentage = this.re(booking.checkInDate, new Date());
-    // const policy = this.refundPolicy.calculate(booking.checkInDate, new Date());
     const policy = this.refundPolicy.calculate(
       booking.checkInDate,
-      new Date(),
+      now,
       booking.createdAt,
     );
+
     const percentage = policy.percentage;
 
     let refundStatus: RefundStatus;
-
     if (percentage === 1) {
       refundStatus = RefundStatus.FULL;
     } else if (percentage >= 0.5) {
@@ -570,15 +559,20 @@ export class BookingsService {
       refundStatus = RefundStatus.NOT_REFUNDABLE;
     }
 
-    const refundAmount = payment.amount.mul(percentage);
+    const originalAmount = paidPayments.reduce(
+      (sum, payment) => sum.add(payment.amount),
+      new Prisma.Decimal(0),
+    );
+
+    const refundAmount = originalAmount.mul(percentage);
 
     return {
       refundStatus,
       refundable: percentage > 0,
       percentage,
       refundAmount: refundAmount.toString(),
-      originalAmount: payment.amount.toString(),
-      currency: payment.currency,
+      originalAmount: originalAmount.toString(),
+      currency: paidPayments[0]?.currency ?? booking.currency,
       checkInDate: booking.checkInDate,
       now,
     };
@@ -857,30 +851,39 @@ export class BookingsService {
       },
     });
 
-    const payment = await this.prisma.payment.findFirst({
-      where: {
-        bookingId: bookId,
-        status: PaymentStatus.PAID,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    const paidPayments = await this.getPaidChargePaymentsForBooking(bookId);
 
-    if (payment && new Date() < booking.checkInDate) {
+    if (paidPayments.length && new Date() < booking.checkInDate) {
       const policy = this.refundPolicy.calculate(
         booking.checkInDate,
         new Date(),
+        booking.createdAt,
       );
+
       const percentage = policy.percentage;
 
       if (percentage > 0) {
-        const refundAmount = payment.amount.mul(percentage);
+        for (const payment of paidPayments) {
+          const refundAmount = payment.amount.mul(percentage);
 
-        await this.paymentsService.refundPayment({
-          paymentId: payment.id,
-          amount: refundAmount,
-          reason: payload.reason ?? 'Tenant made a refund',
-          paymongoReason: 'requested_by_customer',
-        });
+          if (refundAmount.gt(0)) {
+            await this.paymentsService.refundPayment({
+              paymentId: payment.id,
+              amount: refundAmount,
+              reason: payload.reason ?? 'Booking cancelled before check-in',
+              paymongoReason: 'requested_by_customer',
+            });
+
+            if (payment.bookingChargeId && percentage === 1) {
+              await this.prisma.bookingCharge.update({
+                where: { id: payment.bookingChargeId },
+                data: {
+                  status: BookingChargeStatus.REFUNDED,
+                },
+              });
+            }
+          }
+        }
 
         finalBooking = await this.prisma.booking.update({
           where: { id: bookId },
@@ -1032,6 +1035,247 @@ export class BookingsService {
     return expiredBookings.length;
   }
 
+  async expireOverdueReservationCharges() {
+    const now = new Date();
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        status: BookingStatus.AWAITING_PAYMENT,
+        isDeleted: false,
+        charges: {
+          some: {
+            type: BookingChargeType.RESERVATION_FEE,
+            status: BookingChargeStatus.PENDING,
+            expiresAt: { lte: now },
+          },
+        },
+      },
+      include: {
+        charges: true,
+      },
+    });
+
+    for (const booking of bookings) {
+      await this.prisma.$transaction(async (tx) => {
+        const expiredChargeIds = booking.charges
+          .filter(
+            (c) =>
+              c.type === BookingChargeType.RESERVATION_FEE &&
+              c.status === BookingChargeStatus.PENDING &&
+              c.expiresAt &&
+              c.expiresAt <= now,
+          )
+          .map((c) => c.id);
+
+        if (!expiredChargeIds.length) return;
+
+        await tx.bookingCharge.updateMany({
+          where: { id: { in: expiredChargeIds } },
+          data: { status: BookingChargeStatus.EXPIRED },
+        });
+
+        await tx.payment.updateMany({
+          where: {
+            bookingChargeId: { in: expiredChargeIds },
+            status: {
+              in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+            },
+          },
+          data: {
+            status: PaymentStatus.EXPIRED,
+          },
+        });
+
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: {
+            status: BookingStatus.CANCELLED_BOOKING,
+            tenantMessage:
+              'Booking automatically cancelled because reservation fee was not paid on time.',
+          },
+        });
+      });
+    }
+
+    return bookings.length;
+  }
+  async expireOverdueExtensionCharges() {
+    const now = new Date();
+
+    const overdueExtensionCharges = await this.prisma.bookingCharge.findMany({
+      where: {
+        type: BookingChargeType.EXTENSION_PAYMENT,
+        status: BookingChargeStatus.PENDING,
+        dueDate: { lte: now },
+        booking: {
+          status: BookingStatus.COMPLETED_BOOKING,
+          occupancyReleased: false,
+          isDeleted: false,
+        },
+      },
+      include: {
+        booking: true,
+        bookingExtensionRequest: true,
+      },
+      orderBy: {
+        bookingId: 'asc',
+      },
+    });
+
+    if (!overdueExtensionCharges.length) return 0;
+
+    let processedCount = 0;
+
+    for (const charge of overdueExtensionCharges) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const freshCharge = await tx.bookingCharge.findUnique({
+            where: { id: charge.id },
+            include: {
+              bookingExtensionRequest: true,
+            },
+          });
+
+          if (!freshCharge) return;
+          if (freshCharge.status !== BookingChargeStatus.PENDING) return;
+
+          await tx.bookingCharge.update({
+            where: { id: freshCharge.id },
+            data: {
+              status: BookingChargeStatus.EXPIRED,
+            },
+          });
+
+          await this.expirePendingPaymentsForCharges(tx, [freshCharge.id]);
+
+          const extensionRequestId =
+            freshCharge.bookingExtensionRequest?.id ??
+            (freshCharge.metadata as { extensionRequestId?: number } | null)
+              ?.extensionRequestId ??
+            null;
+
+          if (extensionRequestId) {
+            await tx.bookingExtensionRequest.update({
+              where: { id: extensionRequestId },
+              data: {
+                status: BookingExtensionStatus.CANCELLED,
+                updatedAt: now,
+              },
+            });
+          }
+        });
+
+        processedCount += 1;
+        this.logger.log(
+          `Expired extension charge ${charge.id} for booking ${charge.bookingId}`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed expiring extension charge ${charge.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+
+    return processedCount;
+  }
+  async expireOverduePreCheckInCharges() {
+    const now = new Date();
+
+    const overdueCharges = await this.prisma.bookingCharge.findMany({
+      where: {
+        type: {
+          in: [BookingChargeType.ADVANCE_PAYMENT, BookingChargeType.DEPOSIT],
+        },
+        status: BookingChargeStatus.PENDING,
+        dueDate: { lte: now },
+        booking: {
+          status: BookingStatus.AWAITING_PAYMENT,
+          isDeleted: false,
+        },
+      },
+      include: {
+        booking: true,
+      },
+      orderBy: {
+        bookingId: 'asc',
+      },
+    });
+
+    if (!overdueCharges.length) return 0;
+
+    const grouped = new Map<number, typeof overdueCharges>();
+
+    for (const charge of overdueCharges) {
+      if (!grouped.has(charge.bookingId)) {
+        grouped.set(charge.bookingId, []);
+      }
+      grouped.get(charge.bookingId)!.push(charge);
+    }
+
+    let processedCount = 0;
+
+    for (const [bookingId, charges] of grouped.entries()) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          const booking = await tx.booking.findUnique({
+            where: { id: bookingId },
+          });
+
+          if (!booking) return;
+          if (booking.status !== BookingStatus.AWAITING_PAYMENT) return;
+
+          const pendingRequiredCharges = await tx.bookingCharge.findMany({
+            where: {
+              bookingId,
+              isRequired: true,
+              status: BookingChargeStatus.PENDING,
+            },
+            select: { id: true },
+          });
+
+          const pendingChargeIds = pendingRequiredCharges.map((c) => c.id);
+
+          if (!pendingChargeIds.length) return;
+
+          await tx.bookingCharge.updateMany({
+            where: {
+              id: { in: pendingChargeIds },
+            },
+            data: {
+              status: BookingChargeStatus.EXPIRED,
+            },
+          });
+
+          await this.expirePendingPaymentsForCharges(tx, pendingChargeIds);
+
+          await tx.booking.update({
+            where: { id: bookingId },
+            data: {
+              status: BookingStatus.CANCELLED_BOOKING,
+              tenantMessage:
+                booking.tenantMessage ??
+                'Booking automatically cancelled because required pre-check-in charges were not paid on time.',
+              updatedAt: now,
+            },
+          });
+        });
+
+        processedCount += 1;
+        this.logger.log(
+          `Cancelled booking ${bookingId} because pre-check-in charges expired`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed expiring pre-check-in charges for booking ${bookingId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
+    }
+
+    return processedCount;
+  }
+
   async releaseEndedBookingSlots() {
     const now = new Date();
 
@@ -1145,6 +1389,25 @@ export class BookingsService {
   //   });
   // }
 
+  private async expirePendingPaymentsForCharges(
+    tx: Prisma.TransactionClient,
+    chargeIds: number[],
+  ) {
+    if (!chargeIds.length) return;
+
+    await tx.payment.updateMany({
+      where: {
+        bookingChargeId: { in: chargeIds },
+        status: {
+          in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+        },
+      },
+      data: {
+        status: PaymentStatus.EXPIRED,
+      },
+    });
+  }
+
   private buildInitialBookingCharges(params: {
     bookingId: number;
     reservationFee: number;
@@ -1236,6 +1499,243 @@ export class BookingsService {
     return charges;
   }
 
+  async requestExtension(bookId: number, payload: RequestExtensionDto) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookId },
+      include: {
+        room: {
+          select: {
+            boardingHouse: {
+              select: { ownerId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.tenantId !== payload.tenantId) {
+      throw new ForbiddenException(
+        'You are not authorized to request an extension for this booking',
+      );
+    }
+
+    if (booking.status !== BookingStatus.COMPLETED_BOOKING) {
+      throw new BadRequestException(
+        'Only confirmed bookings can request an extension',
+      );
+    }
+
+    if (booking.occupancyReleased) {
+      throw new BadRequestException(
+        'Cannot extend a booking that has already been checked out',
+      );
+    }
+
+    const requestedCheckOutDate = new Date(payload.requestedCheckOutDate);
+
+    if (isNaN(requestedCheckOutDate.getTime())) {
+      throw new BadRequestException('Invalid requested checkout date');
+    }
+
+    if (requestedCheckOutDate <= booking.checkOutDate) {
+      throw new BadRequestException(
+        'Requested checkout date must be later than the current checkout date',
+      );
+    }
+
+    const existingOpenRequest =
+      await this.prisma.bookingExtensionRequest.findFirst({
+        where: {
+          bookingId: bookId,
+          status: {
+            in: [
+              BookingExtensionStatus.PENDING,
+              BookingExtensionStatus.APPROVED_AWAITING_PAYMENT,
+            ],
+          },
+        },
+      });
+
+    if (existingOpenRequest) {
+      throw new BadRequestException(
+        'There is already an open extension request for this booking',
+      );
+    }
+
+    return this.prisma.bookingExtensionRequest.create({
+      data: {
+        bookingId: booking.id,
+        tenantId: booking.tenantId,
+        ownerId: booking.room.boardingHouse.ownerId,
+        currentCheckOutDate: booking.checkOutDate,
+        requestedCheckOutDate,
+        status: BookingExtensionStatus.PENDING,
+        reason: payload.reason ?? null,
+      },
+    });
+  }
+
+  async approveExtension(
+    bookId: number,
+    extensionId: number,
+    payload: ApproveExtensionDto,
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookId },
+      include: {
+        room: {
+          select: {
+            boardingHouse: {
+              select: { ownerId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.room.boardingHouse.ownerId !== payload.ownerId) {
+      throw new ForbiddenException(
+        'You are not authorized to approve this extension request',
+      );
+    }
+
+    if (booking.status !== BookingStatus.COMPLETED_BOOKING) {
+      throw new BadRequestException('Only confirmed bookings can be extended');
+    }
+
+    if (booking.occupancyReleased) {
+      throw new BadRequestException(
+        'Cannot extend a booking that has already been checked out',
+      );
+    }
+
+    const extension = await this.prisma.bookingExtensionRequest.findUnique({
+      where: { id: extensionId },
+    });
+
+    if (!extension || extension.bookingId !== bookId) {
+      throw new NotFoundException('Extension request not found');
+    }
+
+    if (extension.status !== BookingExtensionStatus.PENDING) {
+      throw new BadRequestException(
+        'Only pending extension requests can be approved',
+      );
+    }
+
+    if (payload.extensionAmount <= 0) {
+      throw new BadRequestException(
+        'Extension payment amount must be greater than zero',
+      );
+    }
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const latestCharge = await tx.bookingCharge.findFirst({
+        where: { bookingId: bookId },
+        orderBy: { sequence: 'desc' },
+        select: { sequence: true },
+      });
+
+      const nextSequence = (latestCharge?.sequence ?? 0) + 1;
+
+      const extensionCharge = await tx.bookingCharge.create({
+        data: {
+          bookingId: bookId,
+          type: BookingChargeType.EXTENSION_PAYMENT,
+          status: BookingChargeStatus.PENDING,
+          amount: new Prisma.Decimal(payload.extensionAmount),
+          currency: CurrencyType.PHP,
+          sequence: nextSequence,
+          isRequired: true,
+          dueDate: extension.currentCheckOutDate,
+          description: 'Extension payment approved by owner',
+          metadata: {
+            extensionRequestId: extension.id,
+            currentCheckOutDate: extension.currentCheckOutDate.toISOString(),
+            requestedCheckOutDate:
+              extension.requestedCheckOutDate.toISOString(),
+          },
+        },
+      });
+
+      const updatedExtension = await tx.bookingExtensionRequest.update({
+        where: { id: extension.id },
+        data: {
+          status: BookingExtensionStatus.APPROVED_AWAITING_PAYMENT,
+          ownerMessage: payload.message ?? null,
+          extensionChargeId: extensionCharge.id,
+          approvedAt: new Date(),
+        },
+      });
+
+      return {
+        extensionRequest: updatedExtension,
+        extensionCharge,
+      };
+    });
+
+    return result;
+  }
+
+  async rejectExtension(
+    bookId: number,
+    extensionId: number,
+    payload: RejectExtensionDto,
+  ) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookId },
+      include: {
+        room: {
+          select: {
+            boardingHouse: {
+              select: { ownerId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.room.boardingHouse.ownerId !== payload.ownerId) {
+      throw new ForbiddenException(
+        'You are not authorized to reject this extension request',
+      );
+    }
+
+    const extension = await this.prisma.bookingExtensionRequest.findUnique({
+      where: { id: extensionId },
+    });
+
+    if (!extension || extension.bookingId !== bookId) {
+      throw new NotFoundException('Extension request not found');
+    }
+
+    if (extension.status !== BookingExtensionStatus.PENDING) {
+      throw new BadRequestException(
+        'Only pending extension requests can be rejected',
+      );
+    }
+
+    return this.prisma.bookingExtensionRequest.update({
+      where: { id: extension.id },
+      data: {
+        status: BookingExtensionStatus.REJECTED,
+        ownerMessage: payload.reason ?? null,
+      },
+    });
+  }
+
   private buildRefundSummary(params: {
     paymentAmount: Prisma.Decimal;
     refundAmount: Prisma.Decimal;
@@ -1274,6 +1774,19 @@ export class BookingsService {
       default:
         return PurchaseType.ROOM_BOOKING;
     }
+  }
+
+  private async getPaidChargePaymentsForBooking(bookId: number) {
+    return this.prisma.payment.findMany({
+      where: {
+        bookingId: bookId,
+        bookingChargeId: { not: null },
+        status: PaymentStatus.PAID,
+      },
+      orderBy: {
+        createdAt: 'asc',
+      },
+    });
   }
 
   private async getNextPendingCharge(bookingId: number) {

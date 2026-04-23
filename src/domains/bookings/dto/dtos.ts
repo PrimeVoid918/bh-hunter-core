@@ -8,6 +8,7 @@ import {
   IsInt,
   Min,
   Max,
+  IsDateString,
 } from 'class-validator';
 
 import { BookingStatus, BookingType } from '@prisma/client';
@@ -215,6 +216,40 @@ export class CancelBookingDto {
 
   @IsString()
   role!: 'TENANT' | 'OWNER';
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class RequestExtensionDto {
+  @IsNumber()
+  tenantId!: number;
+
+  @IsDateString()
+  requestedCheckOutDate!: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+export class ApproveExtensionDto {
+  @IsNumber()
+  ownerId!: number;
+
+  @IsNumber()
+  @Min(0)
+  extensionAmount!: number;
+
+  @IsOptional()
+  @IsString()
+  message?: string;
+}
+
+export class RejectExtensionDto {
+  @IsNumber()
+  ownerId!: number;
 
   @IsOptional()
   @IsString()

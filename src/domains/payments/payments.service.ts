@@ -837,15 +837,7 @@ export class PaymentsService {
       payment.providerPaymentId = providerPaymentId;
     }
 
-    let completedBookingEvent: {
-      bookingId: number;
-      tenantId: number;
-      ownerId: number;
-      roomId: number;
-      boardingHouseId: number;
-    } | null = null;
-
-    await this.prisma.$transaction(async (tx) => {
+    const completedBookingEvent = await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: payment.id },
         data: { status: PaymentStatus.PAID },
@@ -905,7 +897,7 @@ export class PaymentsService {
           });
         }
 
-        return;
+        return null;
       }
 
       if (payment.bookingChargeId) {
@@ -917,6 +909,49 @@ export class PaymentsService {
           throw new Error('Booking charge not found for payment');
         }
 
+        if (charge.type === BookingChargeType.EXTENSION_PAYMENT) {
+          const metadata = charge.metadata as {
+            extensionRequestId?: number;
+            requestedCheckOutDate?: string;
+          } | null;
+
+          if (!payment.bookingId) {
+            throw new Error('Extension payment missing bookingId');
+          }
+
+          if (
+            !metadata?.extensionRequestId ||
+            !metadata?.requestedCheckOutDate
+          ) {
+            throw new Error('Extension charge metadata is incomplete');
+          }
+
+          await tx.booking.update({
+            where: { id: payment.bookingId },
+            data: {
+              checkOutDate: new Date(metadata.requestedCheckOutDate),
+            },
+          });
+
+          await tx.bookingExtensionRequest.update({
+            where: { id: metadata.extensionRequestId },
+            data: {
+              status: 'PAID',
+              paidAt: new Date(),
+            },
+          });
+
+          await tx.bookingCharge.update({
+            where: { id: charge.id },
+            data: {
+              status: BookingChargeStatus.PAID,
+              paidAt: new Date(),
+            },
+          });
+
+          return null;
+        }
+
         await tx.bookingCharge.update({
           where: { id: charge.id },
           data: {
@@ -926,7 +961,7 @@ export class PaymentsService {
         });
 
         if (!payment.bookingId) {
-          return;
+          return null;
         }
 
         const booking = await tx.booking.findUnique({
@@ -976,14 +1011,16 @@ export class PaymentsService {
             },
           });
 
-          completedBookingEvent = {
+          return {
             bookingId: booking.id,
             tenantId: booking.tenantId,
             ownerId: payment.ownerId,
             roomId: booking.roomId,
             boardingHouseId: booking.boardingHouseId,
           };
-        } else if (booking.status === BookingStatus.PAYMENT_FAILED) {
+        }
+
+        if (booking.status === BookingStatus.PAYMENT_FAILED) {
           await tx.booking.update({
             where: { id: booking.id },
             data: {
@@ -992,12 +1029,13 @@ export class PaymentsService {
           });
         }
 
-        return;
+        return null;
       }
 
       if (payment.purchaseType === PurchaseType.ROOM_BOOKING) {
-        if (!payment.bookingId)
+        if (!payment.bookingId) {
           throw new Error('Booking payment missing bookingId');
+        }
 
         const booking = await tx.booking.findUnique({
           where: { id: payment.bookingId },
@@ -1011,7 +1049,9 @@ export class PaymentsService {
           },
         });
 
-        if (!booking) throw new Error('Booking not found');
+        if (!booking) {
+          throw new Error('Booking not found');
+        }
 
         if (booking.status !== BookingStatus.COMPLETED_BOOKING) {
           await tx.booking.update({
@@ -1029,7 +1069,7 @@ export class PaymentsService {
             },
           });
 
-          completedBookingEvent = {
+          return {
             bookingId: booking.id,
             tenantId: booking.tenantId,
             ownerId: payment.ownerId,
@@ -1038,23 +1078,24 @@ export class PaymentsService {
           };
         }
       }
+
+      return null;
     });
 
-    //! commented because eventPublisher needs adjustment
-    // if (completedBookingEvent) {
-    //   this.bookingEventPublisher.completed({
-    //     bookingId: completedBookingEvent.bookingId,
-    //     tenantId: completedBookingEvent.tenantId,
-    //     ownerId: completedBookingEvent.ownerId,
-    //     data: {
-    //       bhId: completedBookingEvent.boardingHouseId,
-    //       ownerId: completedBookingEvent.ownerId,
-    //       tenantId: completedBookingEvent.tenantId,
-    //       resourceType: 'BOOKING',
-    //       roomId: completedBookingEvent.roomId,
-    //     },
-    //   });
-    // }
+    if (completedBookingEvent) {
+      this.bookingEventPublisher.completed({
+        bookingId: completedBookingEvent.bookingId,
+        tenantId: completedBookingEvent.tenantId,
+        ownerId: completedBookingEvent.ownerId,
+        data: {
+          bhId: completedBookingEvent.boardingHouseId,
+          ownerId: completedBookingEvent.ownerId,
+          tenantId: completedBookingEvent.tenantId,
+          resourceType: ResourceType.BOOKING,
+          roomId: completedBookingEvent.roomId,
+        },
+      });
+    }
 
     return { success: true };
   }

@@ -15,6 +15,9 @@ import {
   PatchApprovePayloadDTO,
   PatchBookingRejectionPayloadDTO,
   FindAllBookingFilterDto,
+  RequestExtensionDto,
+  ApproveExtensionDto,
+  RejectExtensionDto,
 } from './dto/dtos';
 import { ApiTags } from '@nestjs/swagger';
 import { PaymentsService } from '../payments/payments.service';
@@ -33,6 +36,32 @@ export class BookingsController {
   //   return this.paymentsService.createBookingPaymentForFrontend(+id);
   // }
   //!! old deprecated booking implementation
+
+  @Post(':id/extensions')
+  requestExtension(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() payload: RequestExtensionDto,
+  ) {
+    return this.bookingsService.requestExtension(id, payload);
+  }
+
+  @Patch(':id/extensions/:extensionId/approve')
+  approveExtension(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('extensionId', ParseIntPipe) extensionId: number,
+    @Body() payload: ApproveExtensionDto,
+  ) {
+    return this.bookingsService.approveExtension(id, extensionId, payload);
+  }
+
+  @Patch(':id/extensions/:extensionId/reject')
+  rejectExtension(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('extensionId', ParseIntPipe) extensionId: number,
+    @Body() payload: RejectExtensionDto,
+  ) {
+    return this.bookingsService.rejectExtension(id, extensionId, payload);
+  }
 
   //* new  booking implementation
   @Post(':id/payment/checkout')

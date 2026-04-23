@@ -378,8 +378,9 @@ model Booking {
   paymentId        Int?
   bookingAgreement BookingAgreement?
 
-  approvedAt  DateTime? // NEW
-  confirmedAt DateTime? // NEW
+  approvedAt               DateTime? // NEW
+  confirmedAt              DateTime? // NEW
+  bookingExtensionRequests BookingExtensionRequest[]
 }
 
 model BookingCharge {
@@ -406,8 +407,9 @@ model BookingCharge {
 
   payment Payment? // no fields/references here
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  bookingExtensionRequest BookingExtensionRequest?
 
   @@index([bookingId, status])
   @@index([bookingId, type])
@@ -685,4 +687,41 @@ model BookingAgreement {
   @@index([tenantId])
   @@index([ownerId])
   @@index([boardingHouseId])
+}
+
+enum BookingExtensionStatus {
+  PENDING
+  APPROVED_AWAITING_PAYMENT
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+model BookingExtensionRequest {
+  id Int @id @default(autoincrement())
+
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  tenantId Int
+  ownerId  Int
+
+  currentCheckOutDate   DateTime
+  requestedCheckOutDate DateTime
+
+  status BookingExtensionStatus @default(PENDING)
+
+  reason       String?
+  ownerMessage String?
+
+  extensionChargeId Int?           @unique
+  extensionCharge   BookingCharge? @relation(fields: [extensionChargeId], references: [id])
+
+  approvedAt DateTime?
+  paidAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId, status])
 }

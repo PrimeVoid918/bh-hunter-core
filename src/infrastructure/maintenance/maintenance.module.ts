@@ -6,9 +6,16 @@ import { SharedModule } from '../shared/shared.module';
 import { SubscriptionsModule } from 'src/domains/subscriptions/subscriptions.module';
 import { PaymentsModule } from 'src/domains/payments/payments.module';
 import { BookingsModule } from 'src/domains/bookings/bookings.module';
+import { NotificationsModule } from 'src/domains/notifications/notifications.module';
 
 @Module({
-  imports: [SharedModule, SubscriptionsModule, PaymentsModule, BookingsModule],
+  imports: [
+    SharedModule,
+    SubscriptionsModule,
+    PaymentsModule,
+    BookingsModule,
+    NotificationsModule,
+  ],
   providers: [MaintenanceService, CleanupService, PrismaService],
 })
 export class MaintenanceModule {}
