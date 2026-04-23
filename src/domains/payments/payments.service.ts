@@ -20,6 +20,8 @@ import {
   Prisma,
   BookingStatus,
   SubscriptionStatus,
+  BookingChargeStatus,
+  BookingChargeType,
 } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
@@ -57,163 +59,166 @@ export class PaymentsService {
     return this.database.getClient();
   }
 
+  //! depricated funtion or legacy code
   /** Create payment for a booking */
-  async createBookingPayment(input: CreateBookingPaymentInput) {
-    // Fetch booking
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: input.bookingId },
-      include: {
-        tenant: true,
-        room: { include: { boardingHouse: true } },
-      },
-    });
+  // async createBookingPayment(input: CreateBookingPaymentInput) {
+  //   const booking = await this.prisma.booking.findUnique({
+  //     where: { id: input.bookingId },
+  //     include: {
+  //       tenant: true,
+  //       room: { include: { boardingHouse: true } },
+  //     },
+  //   });
 
-    if (!booking) throw new NotFoundException('Booking not found');
+  //   if (!booking) throw new NotFoundException('Booking not found');
 
-    if (
-      booking.status !== BookingStatus.AWAITING_PAYMENT &&
-      booking.status !== BookingStatus.PAYMENT_FAILED
-    ) {
-      throw new BadRequestException(
-        `Booking cannot be paid in status: ${booking.status}`,
-      );
-    }
+  //   if (
+  //     booking.status !== BookingStatus.AWAITING_PAYMENT &&
+  //     booking.status !== BookingStatus.PAYMENT_FAILED
+  //   ) {
+  //     throw new BadRequestException(
+  //       `Booking cannot be paid in status: ${booking.status}`,
+  //     );
+  //   }
 
-    if (booking.status === BookingStatus.PAYMENT_FAILED) {
-      await this.prisma.booking.update({
-        where: { id: booking.id },
-        data: { status: BookingStatus.AWAITING_PAYMENT },
-      });
-    }
+  //   if (booking.status === BookingStatus.PAYMENT_FAILED) {
+  //     await this.prisma.booking.update({
+  //       where: { id: booking.id },
+  //       data: { status: BookingStatus.AWAITING_PAYMENT },
+  //     });
+  //   }
 
-    // If this is a retry after a failed payment, reopen payment flow
-    if (booking.status === BookingStatus.PAYMENT_FAILED) {
-      await this.prisma.booking.update({
-        where: { id: booking.id },
-        data: {
-          status: BookingStatus.AWAITING_PAYMENT,
-        },
-      });
-    }
+  //   // If this is a retry after a failed payment, reopen payment flow
+  //   if (booking.status === BookingStatus.PAYMENT_FAILED) {
+  //     await this.prisma.booking.update({
+  //       where: { id: booking.id },
+  //       data: {
+  //         status: BookingStatus.AWAITING_PAYMENT,
+  //       },
+  //     });
+  //   }
 
-    // Optional cleanup:
-    // mark previous unfinished payment attempts as expired so history stays cleaner
-    await this.prisma.payment.updateMany({
-      where: {
-        bookingId: booking.id,
-        purchaseType: PurchaseType.ROOM_BOOKING,
-        status: {
-          in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
-        },
-      },
-      data: {
-        status: PaymentStatus.EXPIRED,
-      },
-    });
+  //   // Optional cleanup:
+  //   // mark previous unfinished payment attempts as expired so history stays cleaner
+  //   await this.prisma.payment.updateMany({
+  //     where: {
+  //       bookingId: booking.id,
+  //       purchaseType: PurchaseType.ROOM_BOOKING,
+  //       status: {
+  //         in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+  //       },
+  //     },
+  //     data: {
+  //       status: PaymentStatus.EXPIRED,
+  //     },
+  //   });
 
-    // Create fresh payment record for this retry
-    const payment = await this.prisma.payment.create({
-      data: {
-        userId: booking.tenantId,
-        userType: ResourceType.TENANT,
-        ownerId: booking.room.boardingHouse.ownerId,
-        amount: input.amount,
-        currency: input.currency ?? CurrencyType.PHP,
-        purchaseType: PurchaseType.ROOM_BOOKING,
-        status: PaymentStatus.PENDING,
-        bookingId: booking.id,
-        provider: PaymentProvider.PAYMONGO,
-      },
-    });
+  //   // Create fresh payment record for this retry
+  //   const payment = await this.prisma.payment.create({
+  //     data: {
+  //       userId: booking.tenantId,
+  //       userType: ResourceType.TENANT,
+  //       ownerId: booking.room.boardingHouse.ownerId,
+  //       amount: input.amount,
+  //       currency: input.currency ?? CurrencyType.PHP,
+  //       purchaseType: PurchaseType.ROOM_BOOKING,
+  //       status: PaymentStatus.PENDING,
+  //       bookingId: booking.id,
+  //       provider: PaymentProvider.PAYMONGO,
+  //     },
+  //   });
 
-    const intent = await this.provider.createPaymentIntent(payment);
+  //   const intent = await this.provider.createPaymentIntent(payment);
 
-    // Update payment with provider info
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        providerPaymentIntentId: intent.id,
-        status: PaymentStatus.REQUIRES_ACTION,
-      },
-    });
+  //   // Update payment with provider info
+  //   await this.prisma.payment.update({
+  //     where: { id: payment.id },
+  //     data: {
+  //       providerPaymentIntentId: intent.id,
+  //       status: PaymentStatus.REQUIRES_ACTION,
+  //     },
+  //   });
 
-    return {
-      paymentId: payment.id,
-      clientSecret: intent.clientSecret!,
-    };
-  }
+  //   return {
+  //     paymentId: payment.id,
+  //     clientSecret: intent.clientSecret!,
+  //   };
+  // }
+  //! depricated funtion or legacy code
 
-  async createBookingPaymentForFrontend(bookingId: number) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { room: { include: { boardingHouse: true } } },
-    });
+  //! depricated funtion or legacy code
+  // async createBookingPaymentForFrontend(bookingId: number) {
+  //   const booking = await this.prisma.booking.findUnique({
+  //     where: { id: bookingId },
+  //     include: { room: { include: { boardingHouse: true } } },
+  //   });
 
-    if (!booking) throw new NotFoundException('Booking not found');
+  //   if (!booking) throw new NotFoundException('Booking not found');
 
-    if (
-      booking.status !== BookingStatus.AWAITING_PAYMENT &&
-      booking.status !== BookingStatus.PAYMENT_FAILED
-    ) {
-      throw new BadRequestException(
-        `Booking cannot be paid in status: ${booking.status}`,
-      );
-    }
+  //   if (
+  //     booking.status !== BookingStatus.AWAITING_PAYMENT &&
+  //     booking.status !== BookingStatus.PAYMENT_FAILED
+  //   ) {
+  //     throw new BadRequestException(
+  //       `Booking cannot be paid in status: ${booking.status}`,
+  //     );
+  //   }
 
-    // Reopen payment if this is a retry
-    if (booking.status === BookingStatus.PAYMENT_FAILED) {
-      await this.prisma.booking.update({
-        where: { id: booking.id },
-        data: {
-          status: BookingStatus.AWAITING_PAYMENT,
-        },
-      });
-    }
+  //   // Reopen payment if this is a retry
+  //   if (booking.status === BookingStatus.PAYMENT_FAILED) {
+  //     await this.prisma.booking.update({
+  //       where: { id: booking.id },
+  //       data: {
+  //         status: BookingStatus.AWAITING_PAYMENT,
+  //       },
+  //     });
+  //   }
 
-    // Expire unfinished previous attempts so history stays cleaner
-    await this.prisma.payment.updateMany({
-      where: {
-        bookingId: booking.id,
-        purchaseType: PurchaseType.ROOM_BOOKING,
-        status: {
-          in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
-        },
-      },
-      data: {
-        status: PaymentStatus.EXPIRED,
-      },
-    });
+  //   // Expire unfinished previous attempts so history stays cleaner
+  //   await this.prisma.payment.updateMany({
+  //     where: {
+  //       bookingId: booking.id,
+  //       purchaseType: PurchaseType.ROOM_BOOKING,
+  //       status: {
+  //         in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+  //       },
+  //     },
+  //     data: {
+  //       status: PaymentStatus.EXPIRED,
+  //     },
+  //   });
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        userId: booking.tenantId,
-        userType: ResourceType.TENANT,
-        ownerId: booking.room.boardingHouse.ownerId,
-        amount: booking.room.price,
-        currency: CurrencyType.PHP,
-        purchaseType: PurchaseType.ROOM_BOOKING,
-        status: PaymentStatus.PENDING,
-        bookingId: booking.id,
-        provider: PaymentProvider.PAYMONGO,
-      },
-    });
+  //   const payment = await this.prisma.payment.create({
+  //     data: {
+  //       userId: booking.tenantId,
+  //       userType: ResourceType.TENANT,
+  //       ownerId: booking.room.boardingHouse.ownerId,
+  //       amount: booking.room.price,
+  //       currency: CurrencyType.PHP,
+  //       purchaseType: PurchaseType.ROOM_BOOKING,
+  //       status: PaymentStatus.PENDING,
+  //       bookingId: booking.id,
+  //       provider: PaymentProvider.PAYMONGO,
+  //     },
+  //   });
 
-    const link = await this.provider.createPaymentLink(payment);
+  //   const link = await this.provider.createPaymentLink(payment);
 
-    await this.prisma.payment.update({
-      where: { id: payment.id },
-      data: {
-        providerPaymentLinkId: link.id,
-        providerPaymentIntentId: link.paymentIntentId,
-        status: PaymentStatus.REQUIRES_ACTION,
-      },
-    });
+  //   await this.prisma.payment.update({
+  //     where: { id: payment.id },
+  //     data: {
+  //       providerPaymentLinkId: link.id,
+  //       providerPaymentIntentId: link.paymentIntentId,
+  //       status: PaymentStatus.REQUIRES_ACTION,
+  //     },
+  //   });
 
-    return {
-      paymentId: payment.id,
-      checkoutUrl: link.checkoutUrl,
-    };
-  }
+  //   return {
+  //     paymentId: payment.id,
+  //     checkoutUrl: link.checkoutUrl,
+  //   };
+  // }
+  //! depricated funtion or legacy code
 
   async createSubscriptionPayment(input: { ownerId: number; planId: string }) {
     const { ownerId, planId } = input;
@@ -369,6 +374,213 @@ export class PaymentsService {
     return payout;
   }
 
+  async createBookingChargeCheckout(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        room: {
+          include: {
+            boardingHouse: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    const nextCharge = await this.getNextPendingCharge(bookingId);
+
+    if (!nextCharge) {
+      throw new BadRequestException('No pending booking charge found');
+    }
+
+    let payment = await this.prisma.payment.findFirst({
+      where: { bookingChargeId: nextCharge.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!payment) {
+      payment = await this.prisma.payment.create({
+        data: {
+          bookingId,
+          bookingChargeId: nextCharge.id,
+          amount: nextCharge.amount,
+          currency: CurrencyType.PHP,
+          status: PaymentStatus.PENDING,
+          purchaseType: this.mapChargeTypeToPurchaseType(nextCharge.type),
+          userId: booking.tenantId,
+          userType: ResourceType.TENANT,
+          ownerId: booking.room.boardingHouse.ownerId,
+          provider: PaymentProvider.PAYMONGO,
+          metadata: {
+            bookingChargeId: nextCharge.id,
+            bookingId,
+            purchaseType: this.mapChargeTypeToPurchaseType(nextCharge.type),
+          },
+        },
+      });
+    } else {
+      if (payment.status === PaymentStatus.PAID) {
+        throw new BadRequestException('This booking charge is already paid');
+      }
+
+      payment = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: PaymentStatus.PENDING,
+          providerPaymentIntentId: null,
+          providerPaymentLinkId: null,
+          providerPaymentId: null,
+          providerSourceId: null,
+        },
+      });
+    }
+
+    const link = await this.provider.createPaymentLink(payment);
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        providerPaymentLinkId: link.id,
+        providerPaymentIntentId: link.paymentIntentId ?? null,
+        status: PaymentStatus.REQUIRES_ACTION,
+      },
+    });
+
+    return {
+      paymentId: payment.id,
+      bookingChargeId: nextCharge.id,
+      chargeType: nextCharge.type,
+      amount: nextCharge.amount,
+      checkoutUrl: link.checkoutUrl,
+    };
+  }
+
+  async createBookingChargePayment(params: {
+    bookingId: number;
+    bookingChargeId: number;
+    tenantId: number;
+    ownerId: number;
+    amount: Prisma.Decimal;
+    purchaseType: PurchaseType;
+  }) {
+    const {
+      bookingId,
+      bookingChargeId,
+      tenantId,
+      ownerId,
+      amount,
+      purchaseType,
+    } = params;
+
+    const charge = await this.prisma.bookingCharge.findUnique({
+      where: { id: bookingChargeId },
+    });
+
+    if (!charge) {
+      throw new NotFoundException('Booking charge not found');
+    }
+
+    if (charge.status === BookingChargeStatus.PAID) {
+      throw new BadRequestException('This booking charge is already paid');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (
+      booking.status !== BookingStatus.AWAITING_PAYMENT &&
+      booking.status !== BookingStatus.PAYMENT_FAILED &&
+      booking.status !== BookingStatus.COMPLETED_BOOKING
+    ) {
+      throw new BadRequestException(
+        `Booking cannot accept charge payment in status: ${booking.status}`,
+      );
+    }
+
+    if (booking.status === BookingStatus.PAYMENT_FAILED) {
+      await this.prisma.booking.update({
+        where: { id: booking.id },
+        data: { status: BookingStatus.AWAITING_PAYMENT },
+      });
+    }
+
+    let payment = await this.prisma.payment.findFirst({
+      where: { bookingChargeId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!payment) {
+      payment = await this.prisma.payment.create({
+        data: {
+          bookingId,
+          bookingChargeId,
+          amount,
+          currency: CurrencyType.PHP,
+          status: PaymentStatus.PENDING,
+          purchaseType,
+          userId: tenantId,
+          userType: ResourceType.TENANT,
+          ownerId,
+          provider: PaymentProvider.PAYMONGO,
+          metadata: {
+            bookingChargeId,
+            bookingId,
+            purchaseType,
+          },
+        },
+      });
+    } else {
+      if (payment.status === PaymentStatus.PAID) {
+        throw new BadRequestException(
+          'Payment already completed for this charge',
+        );
+      }
+
+      payment = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          amount,
+          purchaseType,
+          status: PaymentStatus.PENDING,
+          providerPaymentIntentId: null,
+          providerPaymentLinkId: null,
+          providerPaymentId: null,
+          providerSourceId: null,
+          metadata: {
+            ...(payment.metadata as Record<string, any> | null),
+            bookingChargeId,
+            bookingId,
+            purchaseType,
+          },
+        },
+      });
+    }
+
+    const providerResult = await this.provider.createPaymentIntent(payment);
+
+    await this.prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        providerPaymentIntentId:
+          providerResult.paymentIntentId ?? providerResult.id ?? null,
+        status: PaymentStatus.REQUIRES_ACTION,
+      },
+    });
+
+    return {
+      paymentId: payment.id,
+      clientSecret: providerResult.clientSecret!,
+    };
+  }
+
   /** Refund a payment (only via PayMpongo) */
   async refundPayment({
     paymentId,
@@ -422,79 +634,99 @@ export class PaymentsService {
   async getBookingPayment(bookingId: number) {
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookingId },
+      include: {
+        room: {
+          include: {
+            boardingHouse: true,
+          },
+        },
+      },
     });
 
-    if (!booking) throw new NotFoundException('Booking not found');
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
 
-    const payment = await this.prisma.payment.findFirst({
-      where: { bookingId },
+    const nextCharge = await this.getNextPendingCharge(bookingId);
+
+    if (!nextCharge) {
+      return {
+        bookingId,
+        completed: true,
+        bookingStatus: booking.status,
+        message: 'All required booking charges are already paid',
+      };
+    }
+
+    const existingPayment = await this.prisma.payment.findFirst({
+      where: { bookingChargeId: nextCharge.id },
       orderBy: { createdAt: 'desc' },
     });
 
-    if (!payment) {
-      throw new NotFoundException('No payment found for booking');
+    if (
+      existingPayment &&
+      this.isPayableStatus(existingPayment.status) &&
+      existingPayment.providerPaymentIntentId
+    ) {
+      return {
+        paymentId: existingPayment.id,
+        bookingChargeId: nextCharge.id,
+        chargeType: nextCharge.type,
+        amount: nextCharge.amount,
+        status: existingPayment.status,
+        providerPaymentIntentId: existingPayment.providerPaymentIntentId,
+        canRetry: false,
+      };
     }
 
-    if (!payment.providerPaymentIntentId) {
-      throw new InternalServerErrorException(
-        'Payment does not have a provider payment intent yet',
-      );
-    }
+    const recreated = await this.createBookingChargePayment({
+      bookingId,
+      bookingChargeId: nextCharge.id,
+      tenantId: booking.tenantId,
+      ownerId: booking.room.boardingHouse.ownerId,
+      amount: nextCharge.amount,
+      purchaseType: this.mapChargeTypeToPurchaseType(nextCharge.type),
+    });
 
     return {
-      paymentId: payment.id,
-      status: payment.status,
-      providerPaymentIntentId: payment.providerPaymentIntentId, // now TS knows it's string
-      canRetry: !this.isPayableStatus(payment.status),
+      ...recreated,
+      bookingChargeId: nextCharge.id,
+      chargeType: nextCharge.type,
+      amount: nextCharge.amount,
+      canRetry: false,
     };
-
-    // return {
-    //   paymentId: payment.id,
-    //   status: payment.status,
-    //   providerPaymentIntentId: payment.providerPaymentIntentId,
-    //   canRetry: !this.isPayableStatus(payment.status),
-    // };
   }
 
   async retryBookingPayment(bookingId: number) {
-    const latestPayment = await this.prisma.payment.findFirst({
-      where: { bookingId },
-      orderBy: { createdAt: 'desc' },
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        room: {
+          include: {
+            boardingHouse: true,
+          },
+        },
+      },
     });
 
-    if (!latestPayment)
-      throw new NotFoundException('No previous payment found');
-    if (this.isPayableStatus(latestPayment.status)) {
-      throw new BadRequestException(
-        'Payment is still payable, no retry needed',
-      );
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
     }
 
-    const newPayment = await this.prisma.payment.create({
-      data: {
-        userId: latestPayment.userId,
-        userType: latestPayment.userType,
-        ownerId: latestPayment.ownerId,
-        amount: latestPayment.amount,
-        currency: latestPayment.currency,
-        purchaseType: latestPayment.purchaseType,
-        status: PaymentStatus.PENDING,
-        bookingId: latestPayment.bookingId,
-        provider: latestPayment.provider,
-      },
+    const nextCharge = await this.getNextPendingCharge(bookingId);
+
+    if (!nextCharge) {
+      throw new BadRequestException('No pending booking charge to retry');
+    }
+
+    return this.createBookingChargePayment({
+      bookingId,
+      bookingChargeId: nextCharge.id,
+      tenantId: booking.tenantId,
+      ownerId: booking.room.boardingHouse.ownerId,
+      amount: nextCharge.amount,
+      purchaseType: this.mapChargeTypeToPurchaseType(nextCharge.type),
     });
-
-    const intent = await this.provider.createPaymentIntent(newPayment);
-
-    await this.prisma.payment.update({
-      where: { id: newPayment.id },
-      data: {
-        providerPaymentIntentId: intent.id,
-        status: PaymentStatus.REQUIRES_ACTION,
-      },
-    });
-
-    return { paymentId: newPayment.id, clientSecret: intent.clientSecret };
   }
 
   private isPayableStatus(status: PaymentStatus) {
@@ -580,26 +812,38 @@ export class PaymentsService {
     return { success: true };
   }
 
+  // public async markPaymentPaid(payment: Payment) {
   private async markPaymentPaid(payment: Payment) {
     if (payment.status === PaymentStatus.PAID) return { ignored: true };
 
-    // fetch PayMongo payment ID if missing
-    if (!payment.providerPaymentId) {
+    if (!payment.providerPaymentId && payment.providerPaymentIntentId) {
       const paymentIntent = await this.provider.retrievePaymentIntent(
-        payment.providerPaymentIntentId!,
+        payment.providerPaymentIntentId,
       );
+
       const providerPaymentId = paymentIntent.attributes.payments?.[0]?.id;
+
       if (!providerPaymentId) {
         throw new InternalServerErrorException(
           'PayMongo payment object missing',
         );
       }
+
       await this.prisma.payment.update({
         where: { id: payment.id },
         data: { providerPaymentId },
       });
+
       payment.providerPaymentId = providerPaymentId;
     }
+
+    let completedBookingEvent: {
+      bookingId: number;
+      tenantId: number;
+      ownerId: number;
+      roomId: number;
+      boardingHouseId: number;
+    } | null = null;
 
     await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
@@ -607,7 +851,6 @@ export class PaymentsService {
         data: { status: PaymentStatus.PAID },
       });
 
-      //! Subscription
       if (payment.purchaseType === PurchaseType.SUBSCRIPTION) {
         if (!payment.ownerId) {
           throw new Error('Subscription payment missing ownerId');
@@ -632,9 +875,9 @@ export class PaymentsService {
         await tx.subscription.updateMany({
           where: {
             ownerId: payment.ownerId,
-            status: 'ACTIVE',
+            status: SubscriptionStatus.ACTIVE,
           },
-          data: { status: 'EXPIRED' },
+          data: { status: SubscriptionStatus.EXPIRED },
         });
 
         if (payment.subscriptionId) {
@@ -649,12 +892,11 @@ export class PaymentsService {
             },
           });
         } else {
-          // fallback safety
           await tx.subscription.create({
             data: {
               ownerId: payment.ownerId,
               type: 'PAID',
-              status: 'ACTIVE',
+              status: SubscriptionStatus.ACTIVE,
               startedAt: now,
               expiresAt,
               provider: payment.provider,
@@ -666,12 +908,97 @@ export class PaymentsService {
         return;
       }
 
-      //! Booking
+      if (payment.bookingChargeId) {
+        const charge = await tx.bookingCharge.findUnique({
+          where: { id: payment.bookingChargeId },
+        });
+
+        if (!charge) {
+          throw new Error('Booking charge not found for payment');
+        }
+
+        await tx.bookingCharge.update({
+          where: { id: charge.id },
+          data: {
+            status: BookingChargeStatus.PAID,
+            paidAt: new Date(),
+          },
+        });
+
+        if (!payment.bookingId) {
+          return;
+        }
+
+        const booking = await tx.booking.findUnique({
+          where: { id: payment.bookingId },
+          select: {
+            id: true,
+            status: true,
+            roomId: true,
+            occupantsCount: true,
+            tenantId: true,
+            boardingHouseId: true,
+          },
+        });
+
+        if (!booking) {
+          throw new Error('Booking not found');
+        }
+
+        const remainingRequiredCharges = await tx.bookingCharge.count({
+          where: {
+            bookingId: booking.id,
+            isRequired: true,
+            status: {
+              in: [BookingChargeStatus.PENDING],
+            },
+          },
+        });
+
+        if (
+          remainingRequiredCharges === 0 &&
+          booking.status !== BookingStatus.COMPLETED_BOOKING
+        ) {
+          await tx.booking.update({
+            where: { id: booking.id },
+            data: {
+              status: BookingStatus.COMPLETED_BOOKING,
+              confirmedAt: new Date(),
+            },
+          });
+
+          await tx.room.update({
+            where: { id: booking.roomId },
+            data: {
+              currentCapacity: {
+                increment: booking.occupantsCount,
+              },
+            },
+          });
+
+          completedBookingEvent = {
+            bookingId: booking.id,
+            tenantId: booking.tenantId,
+            ownerId: payment.ownerId,
+            roomId: booking.roomId,
+            boardingHouseId: booking.boardingHouseId,
+          };
+        } else if (booking.status === BookingStatus.PAYMENT_FAILED) {
+          await tx.booking.update({
+            where: { id: booking.id },
+            data: {
+              status: BookingStatus.AWAITING_PAYMENT,
+            },
+          });
+        }
+
+        return;
+      }
+
       if (payment.purchaseType === PurchaseType.ROOM_BOOKING) {
         if (!payment.bookingId)
           throw new Error('Booking payment missing bookingId');
 
-        // Fetch the booking with roomId & occupantsCount
         const booking = await tx.booking.findUnique({
           where: { id: payment.bookingId },
           select: {
@@ -680,54 +1007,57 @@ export class PaymentsService {
             occupantsCount: true,
             tenantId: true,
             boardingHouseId: true,
+            status: true,
           },
         });
 
         if (!booking) throw new Error('Booking not found');
 
-        // Update booking status
-        await tx.booking.update({
-          where: { id: booking.id },
-          data: { status: BookingStatus.COMPLETED_BOOKING },
-        });
+        if (booking.status !== BookingStatus.COMPLETED_BOOKING) {
+          await tx.booking.update({
+            where: { id: booking.id },
+            data: {
+              status: BookingStatus.COMPLETED_BOOKING,
+              confirmedAt: new Date(),
+            },
+          });
 
-        // Update room currentCapacity
-        await tx.room.update({
-          where: { id: booking.roomId },
-          data: { currentCapacity: { increment: booking.occupantsCount } },
-        });
+          await tx.room.update({
+            where: { id: booking.roomId },
+            data: {
+              currentCapacity: { increment: booking.occupantsCount },
+            },
+          });
 
-        // Publish event
-        this.bookingEventPublisher.completed({
-          bookingId: booking.id,
-          tenantId: booking.tenantId,
-          ownerId: payment.ownerId,
-          data: {
-            bhId: booking.boardingHouseId,
-            ownerId: payment.ownerId,
+          completedBookingEvent = {
+            bookingId: booking.id,
             tenantId: booking.tenantId,
-            resourceType: 'BOOKING',
+            ownerId: payment.ownerId,
             roomId: booking.roomId,
-          },
-        });
+            boardingHouseId: booking.boardingHouseId,
+          };
+        }
       }
     });
 
+    //! commented because eventPublisher needs adjustment
+    // if (completedBookingEvent) {
+    //   this.bookingEventPublisher.completed({
+    //     bookingId: completedBookingEvent.bookingId,
+    //     tenantId: completedBookingEvent.tenantId,
+    //     ownerId: completedBookingEvent.ownerId,
+    //     data: {
+    //       bhId: completedBookingEvent.boardingHouseId,
+    //       ownerId: completedBookingEvent.ownerId,
+    //       tenantId: completedBookingEvent.tenantId,
+    //       resourceType: 'BOOKING',
+    //       roomId: completedBookingEvent.roomId,
+    //     },
+    //   });
+    // }
+
     return { success: true };
   }
-
-  // // 🔹 Emit completed booking event
-  // this.eventEmitter.emit<BookingCompletedPayload>(
-  //   BOOKING_EVENTS.COMPLETED,
-  //   {
-  //     bookingId: booking.id,
-  //     data: {
-  //       tenantId: booking.tenantId,
-  //       ownerId: booking.room.ownerId, // if needed
-  //       roomId: booking.roomId,
-  //     },
-  //   },
-  // );
 
   private async markPaymentFailed(payment: Payment) {
     if (payment.status === PaymentStatus.PAID) return { ignored: true };
@@ -745,5 +1075,100 @@ export class PaymentsService {
     }
 
     return { success: true };
+  }
+
+  private mapChargeTypeToPurchaseType(type: BookingChargeType): PurchaseType {
+    switch (type) {
+      case BookingChargeType.RESERVATION_FEE:
+        return PurchaseType.RESERVATION_FEE;
+      case BookingChargeType.ADVANCE_PAYMENT:
+        return PurchaseType.ADVANCE_PAYMENT;
+      case BookingChargeType.DEPOSIT:
+        return PurchaseType.DEPOSIT;
+      case BookingChargeType.EXTENSION_PAYMENT:
+        return PurchaseType.EXTENSION_PAYMENT;
+      default:
+        return PurchaseType.ROOM_BOOKING;
+    }
+  }
+
+  private async getNextPendingCharge(bookingId: number) {
+    return this.prisma.bookingCharge.findFirst({
+      where: {
+        bookingId,
+        isRequired: true,
+        status: BookingChargeStatus.PENDING,
+      },
+      orderBy: { sequence: 'asc' },
+    });
+  }
+
+  //* for debuuggin purposes used for new booking implementation
+  async debugPayNextCharge(bookingId: number) {
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        room: {
+          include: {
+            boardingHouse: true,
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    const nextCharge = await this.getNextPendingCharge(bookingId);
+
+    if (!nextCharge) {
+      throw new BadRequestException('No pending booking charge found');
+    }
+
+    let payment = await this.prisma.payment.findFirst({
+      where: { bookingChargeId: nextCharge.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!payment) {
+      const created = await this.createBookingChargePayment({
+        bookingId,
+        bookingChargeId: nextCharge.id,
+        tenantId: booking.tenantId,
+        ownerId: booking.room.boardingHouse.ownerId,
+        amount: nextCharge.amount,
+        purchaseType: this.mapChargeTypeToPurchaseType(nextCharge.type),
+      });
+
+      payment = await this.prisma.payment.findUnique({
+        where: { id: created.paymentId },
+      });
+    }
+
+    if (!payment) {
+      throw new InternalServerErrorException(
+        'Failed to prepare payment for debug settlement',
+      );
+    }
+
+    if (!payment.providerPaymentId) {
+      payment = await this.prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          providerPaymentId: `debug_paid_${payment.id}_${Date.now()}`,
+        },
+      });
+    }
+
+    await this.markPaymentPaid(payment);
+
+    return {
+      message: 'Next booking charge marked paid in debug mode',
+      bookingId,
+      bookingChargeId: nextCharge.id,
+      chargeType: nextCharge.type,
+      amount: nextCharge.amount,
+    };
   }
 }

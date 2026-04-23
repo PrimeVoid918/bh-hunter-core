@@ -27,10 +27,19 @@ export class BookingsController {
     private readonly paymentsService: PaymentsService,
   ) {}
 
-  @Post(':id/paymongo')
-  createPaymongoPayment(@Param('id') id: string) {
-    return this.paymentsService.createBookingPaymentForFrontend(+id);
+  //!! old deprecated booking implementation
+  // @Post(':id/paymongo')
+  // createPaymongoPayment(@Param('id') id: string) {
+  //   return this.paymentsService.createBookingPaymentForFrontend(+id);
+  // }
+  //!! old deprecated booking implementation
+
+  //* new  booking implementation
+  @Post(':id/payment/checkout')
+  createBookingChargeCheckout(@Param('id', ParseIntPipe) id: number) {
+    return this.paymentsService.createBookingChargeCheckout(id);
   }
+  //* new  booking implementation
 
   @Get(':id/status')
   getBookingStatus(@Param('id', ParseIntPipe) id: number) {

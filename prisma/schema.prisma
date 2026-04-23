@@ -64,6 +64,21 @@ enum PaymentProvider {
   PAYMONGO
 }
 
+enum BookingChargeType {
+  RESERVATION_FEE
+  ADVANCE_PAYMENT
+  DEPOSIT
+  EXTENSION_PAYMENT
+}
+
+enum BookingChargeStatus {
+  PENDING
+  PAID
+  CANCELLED
+  REFUNDED
+  EXPIRED
+}
+
 enum PaymentStatus {
   PENDING
   REQUIRES_ACTION
@@ -82,9 +97,12 @@ enum SubscriptionStatus {
 }
 
 enum PurchaseType {
-  ROOM_BOOKING
-  SUBSCRIPTION
+  ROOM_BOOKING // legacy fallback
+  RESERVATION_FEE
+  ADVANCE_PAYMENT
   DEPOSIT
+  EXTENSION_PAYMENT
+  SUBSCRIPTION
 }
 
 enum PayoutStatus {
@@ -327,35 +345,73 @@ model Location {
 }
 
 model Booking {
-  id                  Int               @id @default(autoincrement())
-  reference           String            @unique // e.g. BK-20251023-XXXX
+  id                  Int           @id @default(autoincrement())
+  reference           String        @unique
   tenantId            Int
-  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   roomId              Int
-  room                Room              @relation(fields: [roomId], references: [id])
+  room                Room          @relation(fields: [roomId], references: [id])
   boardingHouseId     Int
-  boardingHouse       BoardingHouse     @relation(fields: [boardingHouseId], references: [id])
-  bookingType         BookingType       @default(RESERVATION)
-  occupantsCount      Int               @default(1) // tracking
+  boardingHouse       BoardingHouse @relation(fields: [boardingHouseId], references: [id])
+  bookingType         BookingType   @default(RESERVATION)
+  occupantsCount      Int           @default(1)
   dateBooked          DateTime
   checkInDate         DateTime
   checkOutDate        DateTime
-  occupancyReleased   Boolean           @default(false)
+  occupancyReleased   Boolean       @default(false)
   occupancyReleasedAt DateTime?
-  status              BookingStatus     @default(PENDING_REQUEST)
-  paymentProofId      Int? // uploaded receipt / image URL
-  totalAmount         Decimal?          @db.Decimal(10, 2)
-  currency            CurrencyType      @default(PHP)
+  status              BookingStatus @default(PENDING_REQUEST)
+  paymentProofId      Int?
+  totalAmount         Decimal?      @db.Decimal(10, 2)
+  currency            CurrencyType  @default(PHP)
   ownerMessage        String?
   tenantMessage       String?
-  expiresAt           DateTime? // e.g. if pending payment, expiry to auto-cancel
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  isDeleted           Boolean           @default(false)
+  expiresAt           DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  isDeleted           Boolean       @default(false)
   deletedAt           DateTime?
-  payments            Payment[]
-  paymentId           Int?
-  bookingAgreement    BookingAgreement?
+
+  payments Payment[]
+  charges  BookingCharge[] // NEW
+
+  paymentId        Int?
+  bookingAgreement BookingAgreement?
+
+  approvedAt  DateTime? // NEW
+  confirmedAt DateTime? // NEW
+}
+
+model BookingCharge {
+  id Int @id @default(autoincrement())
+
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  type   BookingChargeType
+  status BookingChargeStatus @default(PENDING)
+
+  amount   Decimal      @db.Decimal(10, 2)
+  currency CurrencyType @default(PHP)
+
+  sequence   Int     @default(1)
+  isRequired Boolean @default(true)
+
+  dueDate   DateTime?
+  paidAt    DateTime?
+  expiresAt DateTime?
+
+  description String?
+  metadata    Json?
+
+  payment Payment? // no fields/references here
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookingId, status])
+  @@index([bookingId, type])
+  @@index([dueDate])
 }
 
 model Payment {
@@ -363,7 +419,6 @@ model Payment {
 
   provider PaymentProvider @default(PAYMONGO)
 
-  // External references (PayMongo)
   providerPaymentLinkId   String? @unique
   providerPaymentIntentId String? @unique
   providerPaymentId       String? @unique
@@ -382,6 +437,9 @@ model Payment {
 
   bookingId Int?
   booking   Booking? @relation(fields: [bookingId], references: [id])
+
+  bookingChargeId Int?           @unique
+  bookingCharge   BookingCharge? @relation(fields: [bookingChargeId], references: [id])
 
   subscriptionId Int?
   subscription   Subscription? @relation(fields: [subscriptionId], references: [id])

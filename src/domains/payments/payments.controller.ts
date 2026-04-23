@@ -5,6 +5,8 @@ import {
   Headers,
   BadRequestException,
   Req,
+  Param,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { PaymentsService } from './payments.service';
 import { createHmac } from 'crypto';
@@ -75,5 +77,10 @@ export class PaymentsController {
     const computedHash = hmac.digest('hex');
 
     return computedHash === expectedHash;
+  }
+
+  @Post(':id/debug/pay-next-charge')
+  debugPayNextCharge(@Param('id', ParseIntPipe) id: number) {
+    return this.paymentsService.debugPayNextCharge(id);
   }
 }

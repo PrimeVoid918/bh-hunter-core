@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
@@ -14,6 +15,9 @@ import {
   PaymentStatus,
   RefundStatus,
   CurrencyType,
+  BookingChargeType,
+  PurchaseType,
+  BookingChargeStatus,
 } from '@prisma/client';
 
 import {
@@ -445,12 +449,15 @@ export class BookingsService {
     if (!bookId) {
       throw new NotFoundException('Book ID is missing');
     }
+
     const booking = await this.prisma.booking.findUnique({
       where: { id: bookId },
       include: {
-        payments: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
+        charges: {
+          include: {
+            payment: true,
+          },
+          orderBy: { sequence: 'asc' },
         },
       },
     });
@@ -459,43 +466,40 @@ export class BookingsService {
       throw new NotFoundException('Booking not found');
     }
 
-    const payment = booking.payments?.[0] ?? null;
+    const nextPendingCharge =
+      booking.charges.find((c) => c.isRequired && c.status === 'PENDING') ??
+      null;
 
-    let refundInfo: {
-      eligible: boolean;
-      percentage: number;
-      refundAmount: number;
-      totalAmount: number;
-      hoursBeforeCheckIn: number;
-    } | null = null;
-
-    if (payment && payment.status === PaymentStatus.PAID) {
-      const now = new Date();
-      const checkInDate = booking.checkInDate;
-
-      const hoursBeforeCheckIn =
-        (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
-
-      const policy = this.refundPolicy.calculate(checkInDate);
-
-      const percentage = policy.percentage;
-      const totalAmount = Number(payment.amount);
-      const refundAmount = Number(payment.amount) * percentage;
-
-      refundInfo = {
-        eligible: percentage > 0,
-        percentage,
-        refundAmount,
-        totalAmount,
-        hoursBeforeCheckIn,
-      };
-    }
+    const paidCharges = booking.charges.filter((c) => c.status === 'PAID');
 
     return {
       bookingId: booking.id,
       bookingStatus: booking.status,
-      paymentStatus: payment?.status ?? null,
-      refund: refundInfo,
+      confirmedAt: booking.confirmedAt,
+      nextPendingCharge: nextPendingCharge
+        ? {
+            id: nextPendingCharge.id,
+            type: nextPendingCharge.type,
+            amount: nextPendingCharge.amount,
+            dueDate: nextPendingCharge.dueDate,
+            paymentStatus: nextPendingCharge.payment?.status ?? null,
+          }
+        : null,
+      charges: booking.charges.map((charge) => ({
+        id: charge.id,
+        type: charge.type,
+        status: charge.status,
+        amount: charge.amount,
+        dueDate: charge.dueDate,
+        paidAt: charge.paidAt,
+        paymentStatus: charge.payment?.status ?? null,
+      })),
+      totals: {
+        totalCharges: booking.charges.length,
+        paidCharges: paidCharges.length,
+        remainingCharges: booking.charges.filter((c) => c.status === 'PENDING')
+          .length,
+      },
     };
   }
 
@@ -634,7 +638,13 @@ export class BookingsService {
   }
 
   async patchApproveBooking(bookId: number, payload: PatchApprovePayloadDTO) {
-    const { ownerId, message } = payload;
+    const {
+      ownerId,
+      message,
+      reservationFee,
+      advancePayment,
+      securityDeposit,
+    } = payload;
 
     const booking = await this.validateBookingAccess(bookId, ownerId, 'OWNER');
 
@@ -651,25 +661,71 @@ export class BookingsService {
       );
     }
 
-    const updatedBooking = await this.prisma.booking.update({
-      where: { id: bookId },
-      data: {
-        status: BookingStatus.AWAITING_PAYMENT,
-        ownerMessage: message ?? booking.ownerMessage,
-        updatedAt: new Date(),
-      },
+    const chargesToCreate = this.buildInitialBookingCharges({
+      bookingId: bookId,
+      reservationFee,
+      advancePayment,
+      securityDeposit,
+      checkInDate: booking.checkInDate,
     });
+
+    const now = new Date();
+
+    const updatedBooking = await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.booking.update({
+        where: { id: bookId },
+        data: {
+          status: BookingStatus.AWAITING_PAYMENT,
+          ownerMessage: message ?? booking.ownerMessage,
+          approvedAt: now,
+          updatedAt: now,
+        },
+      });
+
+      await tx.bookingCharge.createMany({
+        data: chargesToCreate,
+      });
+
+      return updated;
+    });
+
+    const firstCharge = await this.prisma.bookingCharge.findFirst({
+      where: {
+        bookingId: bookId,
+        status: 'PENDING',
+      },
+      orderBy: { sequence: 'asc' },
+    });
+
+    if (!firstCharge) {
+      throw new InternalServerErrorException(
+        'Booking was approved but no initial charge was created',
+      );
+    }
 
     let payment: { paymentId: number; clientSecret: string } | null = null;
 
     try {
-      payment = await this.paymentsService.createBookingPayment({
+      payment = await this.paymentsService.createBookingChargePayment({
         bookingId: bookId,
+        bookingChargeId: firstCharge.id,
         tenantId: booking.tenantId,
-        amount: new Prisma.Decimal(booking.room.price),
+        ownerId,
+        amount: firstCharge.amount,
+        purchaseType:
+          firstCharge.type === BookingChargeType.RESERVATION_FEE
+            ? PurchaseType.RESERVATION_FEE
+            : firstCharge.type === BookingChargeType.ADVANCE_PAYMENT
+              ? PurchaseType.ADVANCE_PAYMENT
+              : firstCharge.type === BookingChargeType.DEPOSIT
+                ? PurchaseType.DEPOSIT
+                : PurchaseType.ROOM_BOOKING,
       });
     } catch (err) {
-      console.error('Failed to create payment for booking', bookId, err);
+      this.logger.error(
+        `Failed to create payment for booking ${bookId}`,
+        err instanceof Error ? err.stack : String(err),
+      );
 
       await this.prisma.booking.update({
         where: { id: bookId },
@@ -694,6 +750,13 @@ export class BookingsService {
 
     return {
       ...updatedBooking,
+      firstCharge: {
+        id: firstCharge.id,
+        type: firstCharge.type,
+        amount: firstCharge.amount,
+        dueDate: firstCharge.dueDate,
+        sequence: firstCharge.sequence,
+      },
       paymentClientSecret: payment.clientSecret,
     };
   }
@@ -1059,27 +1122,118 @@ export class BookingsService {
     return processedCount;
   }
 
-  public async confirmBookingPayment(bookingId: number) {
-    const booking = await this.prisma.booking.findUnique({
-      where: { id: bookingId },
-      include: { room: true },
-    });
+  // public async confirmBookingPayment(bookingId: number) {
+  //   const booking = await this.prisma.booking.findUnique({
+  //     where: { id: bookingId },
+  //     include: { room: true },
+  //   });
 
-    if (!booking) throw new NotFoundException('Booking not found');
+  //   if (!booking) throw new NotFoundException('Booking not found');
 
-    // Increment room currentCapacity
-    await this.prisma.room.update({
-      where: { id: booking.roomId },
-      data: {
-        currentCapacity: { increment: booking.occupantsCount },
-      },
-    });
+  //   // Increment room currentCapacity
+  //   await this.prisma.room.update({
+  //     where: { id: booking.roomId },
+  //     data: {
+  //       currentCapacity: { increment: booking.occupantsCount },
+  //     },
+  //   });
 
-    // Update booking status
-    return this.prisma.booking.update({
-      where: { id: bookingId },
-      data: { status: BookingStatus.COMPLETED_BOOKING },
-    });
+  //   // Update booking status
+  //   return this.prisma.booking.update({
+  //     where: { id: bookingId },
+  //     data: { status: BookingStatus.COMPLETED_BOOKING },
+  //   });
+  // }
+
+  private buildInitialBookingCharges(params: {
+    bookingId: number;
+    reservationFee: number;
+    advancePayment: number;
+    securityDeposit?: number;
+    checkInDate: Date;
+  }) {
+    const {
+      bookingId,
+      reservationFee,
+      advancePayment,
+      securityDeposit,
+      checkInDate,
+    } = params;
+
+    const now = new Date();
+    const reservationDueDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    if (
+      reservationFee < 0 ||
+      advancePayment < 0 ||
+      (securityDeposit ?? 0) < 0
+    ) {
+      throw new BadRequestException('Booking charges cannot be negative');
+    }
+
+    // Reservation fee is credited against the advance payment
+    if (reservationFee > advancePayment && advancePayment > 0) {
+      throw new BadRequestException(
+        'Reservation fee cannot be greater than the advance payment because it is deducted from it.',
+      );
+    }
+
+    const deductibleReservation = Math.min(reservationFee, advancePayment);
+    const adjustedAdvancePayment = Math.max(
+      advancePayment - deductibleReservation,
+      0,
+    );
+
+    const charges: Prisma.BookingChargeCreateManyInput[] = [];
+
+    if (reservationFee > 0) {
+      charges.push({
+        bookingId,
+        type: BookingChargeType.RESERVATION_FEE,
+        amount: new Prisma.Decimal(reservationFee),
+        currency: CurrencyType.PHP,
+        sequence: 1,
+        isRequired: true,
+        dueDate: reservationDueDate,
+        expiresAt: reservationDueDate,
+        description: 'Reservation fee to secure the approved booking slot',
+      });
+    }
+
+    if (adjustedAdvancePayment > 0) {
+      charges.push({
+        bookingId,
+        type: BookingChargeType.ADVANCE_PAYMENT,
+        amount: new Prisma.Decimal(adjustedAdvancePayment),
+        currency: CurrencyType.PHP,
+        sequence: 2,
+        isRequired: true,
+        dueDate: checkInDate,
+        description:
+          'Advance payment for the approved stay period after reservation fee credit',
+      });
+    }
+
+    if ((securityDeposit ?? 0) > 0) {
+      charges.push({
+        bookingId,
+        type: BookingChargeType.DEPOSIT,
+        amount: new Prisma.Decimal(securityDeposit!),
+        currency: CurrencyType.PHP,
+        sequence: 3,
+        isRequired: true,
+        dueDate: checkInDate,
+        description: 'Security deposit required before occupancy',
+      });
+    }
+
+    if (!charges.length) {
+      throw new BadRequestException(
+        'At least one booking charge must be greater than zero',
+      );
+    }
+
+    return charges;
   }
 
   private buildRefundSummary(params: {
@@ -1106,6 +1260,36 @@ export class BookingsService {
       isNoRefund: percentage === 0,
     };
   }
+
+  private mapChargeTypeToPurchaseType(type: BookingChargeType): PurchaseType {
+    switch (type) {
+      case BookingChargeType.RESERVATION_FEE:
+        return PurchaseType.RESERVATION_FEE;
+      case BookingChargeType.ADVANCE_PAYMENT:
+        return PurchaseType.ADVANCE_PAYMENT;
+      case BookingChargeType.DEPOSIT:
+        return PurchaseType.DEPOSIT;
+      case BookingChargeType.EXTENSION_PAYMENT:
+        return PurchaseType.EXTENSION_PAYMENT;
+      default:
+        return PurchaseType.ROOM_BOOKING;
+    }
+  }
+
+  private async getNextPendingCharge(bookingId: number) {
+    return this.prisma.bookingCharge.findFirst({
+      where: {
+        bookingId,
+        isRequired: true,
+        status: BookingChargeStatus.PENDING,
+      },
+      orderBy: { sequence: 'asc' },
+    });
+  }
+
+  //* debug for new booking implemenation
+
+  //* debug for new booking implemenation
 }
 // PENDING_REQUEST
 // AWAITING_PAYMENT

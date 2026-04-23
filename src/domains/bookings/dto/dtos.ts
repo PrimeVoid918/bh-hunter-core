@@ -137,12 +137,22 @@ export class PatchApprovePayloadDTO {
   @IsNumber()
   ownerId!: number;
 
-  // @IsNumber()
-  // tenantId!: number;
-
   @IsOptional()
   @IsString()
-  message?: string; // optional message to tenant
+  message?: string;
+
+  @IsNumber()
+  @Min(0)
+  reservationFee!: number;
+
+  @IsNumber()
+  @Min(0)
+  advancePayment!: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  securityDeposit?: number;
 }
 
 /**

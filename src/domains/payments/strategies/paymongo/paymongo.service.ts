@@ -4,7 +4,20 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import axios, { AxiosError } from 'axios';
-import { Payment, PurchaseType } from '@prisma/client';
+import {
+  BookingChargeStatus,
+  BookingChargeType,
+  BookingStatus,
+  CurrencyType,
+  Payment,
+  PaymentProvider,
+  PaymentStatus,
+  PayoutStatus,
+  Prisma,
+  PurchaseType,
+  ResourceType,
+  SubscriptionStatus,
+} from '@prisma/client';
 import { ConfigService } from 'src/config/config.service';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import {
@@ -215,4 +228,30 @@ export class PaymongoService implements PaymentProviderAdapter {
     }
     throw new InternalServerErrorException(`PayMongo ${context} failed`);
   }
+
+  // private mapChargeTypeToPurchaseType(type: BookingChargeType): PurchaseType {
+  //   switch (type) {
+  //     case BookingChargeType.RESERVATION_FEE:
+  //       return PurchaseType.RESERVATION_FEE;
+  //     case BookingChargeType.ADVANCE_PAYMENT:
+  //       return PurchaseType.ADVANCE_PAYMENT;
+  //     case BookingChargeType.DEPOSIT:
+  //       return PurchaseType.DEPOSIT;
+  //     case BookingChargeType.EXTENSION_PAYMENT:
+  //       return PurchaseType.EXTENSION_PAYMENT;
+  //     default:
+  //       return PurchaseType.ROOM_BOOKING;
+  //   }
+  // }
+
+  // private async getNextPendingCharge(bookingId: number) {
+  //   return this.prisma.bookingCharge.findFirst({
+  //     where: {
+  //       bookingId,
+  //       isRequired: true,
+  //       status: BookingChargeStatus.PENDING,
+  //     },
+  //     orderBy: { sequence: 'asc' },
+  //   });
+  // }
 }
