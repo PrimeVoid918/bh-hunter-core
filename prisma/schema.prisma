@@ -298,6 +298,7 @@ model BoardingHouse {
   reviews            Review[]
 
   // filter if owner is out of subs or trial
+  boardingHouseRules BoardingHouseRule[]
 }
 
 model Review {
@@ -326,34 +327,35 @@ model Location {
 }
 
 model Booking {
-  id                  Int           @id @default(autoincrement())
-  reference           String        @unique // e.g. BK-20251023-XXXX
+  id                  Int               @id @default(autoincrement())
+  reference           String            @unique // e.g. BK-20251023-XXXX
   tenantId            Int
-  tenant              Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   roomId              Int
-  room                Room          @relation(fields: [roomId], references: [id])
+  room                Room              @relation(fields: [roomId], references: [id])
   boardingHouseId     Int
-  boardingHouse       BoardingHouse @relation(fields: [boardingHouseId], references: [id])
-  bookingType         BookingType   @default(RESERVATION)
-  occupantsCount      Int           @default(1) // tracking
+  boardingHouse       BoardingHouse     @relation(fields: [boardingHouseId], references: [id])
+  bookingType         BookingType       @default(RESERVATION)
+  occupantsCount      Int               @default(1) // tracking
   dateBooked          DateTime
   checkInDate         DateTime
   checkOutDate        DateTime
-  occupancyReleased   Boolean       @default(false)
+  occupancyReleased   Boolean           @default(false)
   occupancyReleasedAt DateTime?
-  status              BookingStatus @default(PENDING_REQUEST)
+  status              BookingStatus     @default(PENDING_REQUEST)
   paymentProofId      Int? // uploaded receipt / image URL
-  totalAmount         Decimal?      @db.Decimal(10, 2)
-  currency            CurrencyType  @default(PHP)
+  totalAmount         Decimal?          @db.Decimal(10, 2)
+  currency            CurrencyType      @default(PHP)
   ownerMessage        String?
   tenantMessage       String?
   expiresAt           DateTime? // e.g. if pending payment, expiry to auto-cancel
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  isDeleted           Boolean       @default(false)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  isDeleted           Boolean           @default(false)
   deletedAt           DateTime?
   payments            Payment[]
   paymentId           Int?
+  bookingAgreement    BookingAgreement?
 }
 
 model Payment {
@@ -576,4 +578,53 @@ model Notification {
   createdAt DateTime            @default(now())
   expiresAt DateTime?
   isDeleted Boolean             @default(false)
+}
+
+model BoardingHouseRule {
+  id              Int           @id @default(autoincrement())
+  boardingHouseId Int
+  boardingHouse   BoardingHouse @relation(fields: [boardingHouseId], references: [id], onDelete: Cascade)
+
+  title      String
+  content    String
+  isRequired Boolean @default(true)
+  sortOrder  Int     @default(0)
+  isActive   Boolean @default(true)
+  version    Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AgreementStatus {
+  PENDING
+  ACCEPTED
+  PDF_GENERATED
+  VOIDED
+}
+
+model BookingAgreement {
+  id        Int     @id @default(autoincrement())
+  bookingId Int     @unique
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  tenantId        Int
+  ownerId         Int
+  boardingHouseId Int
+  roomId          Int
+
+  status       AgreementStatus @default(PENDING)
+  termsVersion String
+
+  tenantAcceptedAt DateTime?
+  pdfUrl           String?
+
+  snapshot Json
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([ownerId])
+  @@index([boardingHouseId])
 }

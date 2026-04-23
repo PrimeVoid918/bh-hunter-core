@@ -54,6 +54,10 @@ export class CreateBoardingHouseDto {
   @ValidateNested()
   @Type(() => CreateRoomsDto)
   rooms?: CreateRoomsWithGallery[];
+
+  @IsOptional()
+  @IsString()
+  houseRulesContent?: string;
 }
 
 // TODO: make this into a utility

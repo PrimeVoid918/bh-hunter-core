@@ -25,6 +25,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { PaymongoReasons } from './dto/payments.types';
+import { AgreementsService } from '../agreements/agreements.service';
 
 interface CreateBookingPaymentInput {
   bookingId: number;
@@ -49,6 +50,7 @@ export class PaymentsService {
 
     @Inject(forwardRef(() => SubscriptionsService))
     private readonly subscriptionsService: SubscriptionsService,
+    private readonly agreementsService: AgreementsService,
   ) {}
 
   private get prisma() {

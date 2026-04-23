@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PaymongoService } from './strategies/paymongo/paymongo.service';
 import { BookingEventPublisher } from '../bookings/events/bookings.publisher';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { AgreementsService } from '../agreements/agreements.service';
 
 @Module({
   imports: [ConfigModule, forwardRef(() => SubscriptionsModule)],
@@ -16,6 +17,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
       provide: 'PAYMENT_PROVIDER',
       useClass: PaymongoService,
     },
+    AgreementsService,
   ],
   exports: [PaymentsService, PaymentsService, BookingEventPublisher],
 })

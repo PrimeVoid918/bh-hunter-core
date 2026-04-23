@@ -11,6 +11,7 @@ import { FindBoardingHouseDto } from './dto/find-boarding-house.dto';
 import { RoomsService } from '../rooms/rooms.service';
 import { ImageService } from 'src/infrastructure/image/image.service';
 import { FileMap } from 'src/common/types/file.type';
+import { BoardingHouseRulesService } from './boarding-house-rules.service';
 
 // TODO: do something about owners who ran out of subs
 
@@ -21,6 +22,7 @@ export class BoardingHousesService {
     private readonly locationService: LocationService,
     private readonly roomsService: RoomsService,
     private readonly imageService: ImageService,
+    private readonly boardingHouseRulesService: BoardingHouseRulesService,
   ) {}
 
   private get prisma() {
@@ -58,8 +60,7 @@ export class BoardingHousesService {
     if (isDeleted !== undefined) where.isDeleted = isDeleted;
     if (deletedAt !== undefined) where.deletedAt = deletedAt;
 
-    // Validate sortBy to prevent potential injection or errors
-    const validSortFields = ['name', 'price', 'createdAt', 'updatedAt']; // extend as needed
+    const validSortFields = ['name', 'price', 'createdAt', 'updatedAt'];
     const orderByField = validSortFields.includes(sortBy) ? sortBy : 'name';
 
     try {
@@ -83,6 +84,7 @@ export class BoardingHousesService {
       const includeRawLocationPostGIST = await Promise.all(
         result.map(async (house) => {
           const { rooms, ...houseData } = house;
+
           const roomsIdArray = rooms.map((room) => room.id);
           const roomsWithImages = await Promise.all(
             roomsIdArray.map(async (roomId) => {
@@ -98,8 +100,8 @@ export class BoardingHousesService {
           let totalCapacity = 0;
           let currentCapacity = 0;
           const prices = house.rooms.map((room) => room.price.toNumber());
-          const lowestPrice = Math.min(...prices);
-          const highestPrice = Math.max(...prices);
+          const lowestPrice = prices.length ? Math.min(...prices) : 0;
+          const highestPrice = prices.length ? Math.max(...prices) : 0;
 
           house.rooms.forEach((room) => {
             totalCapacity += room.maxCapacity;
@@ -110,6 +112,16 @@ export class BoardingHousesService {
             where: {
               entityId: house.id,
               entityType: ResourceType.BOARDING_HOUSE,
+            },
+          });
+
+          const activeRules = await this.prisma.boardingHouseRule.findMany({
+            where: {
+              boardingHouseId: house.id,
+              isActive: true,
+            },
+            orderBy: {
+              sortOrder: 'asc',
             },
           });
 
@@ -136,6 +148,7 @@ export class BoardingHousesService {
             location: fullLocation,
             thumbnail,
             gallery,
+            houseRulesContent: activeRules[0]?.content ?? '',
           };
         }),
       );
@@ -164,32 +177,36 @@ export class BoardingHousesService {
 
       if (!house) {
         throw new NotFoundException(`Boarding house with id ${id} not found`);
-        // throw new Error();
       }
 
-      // Destructure house and handle rooms separately
       const { rooms, ...houseData } = house;
 
-      // Get rooms with images (via your RoomsService)
       const roomsWithImages = await Promise.all(
         rooms.map((room) => this.roomsService.findOne(house.id, room.id)),
       );
 
-      // Fetch location (raw from PostGIS service)
       const fullLocation = await this.locationService.findOne(house.locationId);
 
-      // Compute capacity
       const totalCapacity = rooms.reduce((acc, r) => acc + r.maxCapacity, 0);
       const currentCapacity = rooms.reduce(
         (acc, r) => acc + r.currentCapacity,
         0,
       );
 
-      // Fetch images for this house
       const images = await this.prisma.image.findMany({
         where: {
           entityId: house.id,
           entityType: 'BOARDING_HOUSE',
+        },
+      });
+
+      const activeRules = await this.prisma.boardingHouseRule.findMany({
+        where: {
+          boardingHouseId: house.id,
+          isActive: true,
+        },
+        orderBy: {
+          sortOrder: 'asc',
         },
       });
 
@@ -201,7 +218,6 @@ export class BoardingHousesService {
         [MediaType.GALLERY, MediaType.THUMBNAIL],
       );
 
-      // Return enriched house object
       return {
         ...houseData,
         rooms: roomsWithImages,
@@ -212,6 +228,7 @@ export class BoardingHousesService {
         location: fullLocation,
         thumbnail,
         gallery,
+        houseRulesContent: activeRules[0]?.content ?? '',
       };
     } catch (error: any) {
       throw new NotFoundException(`Boarding house with id ${id} not found`);
@@ -226,8 +243,11 @@ export class BoardingHousesService {
     const prisma = this.prisma;
 
     return prisma.$transaction(async (tx) => {
-      const returnedLocationId =
-        await this.locationService.create(locationData);
+      console.log('boardinghouseData: ', boardinghouseData);
+      const returnedLocationId = await this.locationService.create(
+        locationData,
+        // tx,
+      );
 
       const createBoardingHouse = await tx.boardingHouse.create({
         data: {
@@ -241,6 +261,22 @@ export class BoardingHousesService {
           location: { connect: { id: returnedLocationId } },
         },
       });
+
+      if (boardinghouseData.houseRulesContent?.trim()) {
+        console.log('boardinghouseData: ', boardinghouseData);
+        await this.boardingHouseRulesService.create(
+          [
+            {
+              title: 'Boarding House Rules',
+              content: boardinghouseData.houseRulesContent.trim(),
+              isRequired: true,
+              sortOrder: 0,
+            },
+          ],
+          createBoardingHouse.id,
+          tx,
+        );
+      }
 
       if (boardinghouseData.rooms?.length) {
         await this.roomsService.create(
@@ -301,9 +337,18 @@ export class BoardingHousesService {
         );
       }
 
+      const [location, houseRules] = await Promise.all([
+        this.locationService.findOne(returnedLocationId),
+        this.boardingHouseRulesService.findByBoardingHouse(
+          createBoardingHouse.id,
+          // tx,
+        ),
+      ]);
+
       return {
         ...createBoardingHouse,
-        location: await this.locationService.findOne(returnedLocationId),
+        location,
+        houseRules,
       };
     });
   }
@@ -320,7 +365,6 @@ export class BoardingHousesService {
     const prisma = this.prisma;
 
     return prisma.$transaction(async (tx) => {
-      // #1 --- Update primitive BH fields exactly like now
       const data: Prisma.BoardingHouseUpdateInput = {};
 
       //! make frontend and backend parser for key=value pair of images when transferring in path
@@ -342,7 +386,6 @@ export class BoardingHousesService {
         }
       }
 
-      // #2 --- Update nested location
       if (dto.location) {
         data.location = {
           update: Object.fromEntries(
@@ -351,15 +394,59 @@ export class BoardingHousesService {
         };
       }
 
-      // #3 --- Perform the actual update
       const updated = await tx.boardingHouse.update({
         where: { id },
         data,
         include: { location: true },
       });
 
-      // #4 --- Handle NEW UPLOADED IMAGES (non-destructive)
-      // follows your create() behavior
+      if (dto.houseRulesContent !== undefined) {
+        const content = dto.houseRulesContent.trim();
+
+        if (content) {
+          await this.boardingHouseRulesService.replace(
+            [
+              {
+                title: 'Boarding House Rules',
+                content,
+                isRequired: true,
+                sortOrder: 0,
+              },
+            ],
+            id,
+            tx,
+          );
+        } else {
+          await this.boardingHouseRulesService.replace([], id, tx);
+        }
+      }
+
+      if (images?.removeGalleryIds?.length) {
+        for (const imageId of images.removeGalleryIds) {
+          await tx.image.update({
+            where: {
+              id: imageId,
+            },
+            data: {
+              isDeleted: true,
+              deletedAt: new Date(),
+            },
+          });
+        }
+      }
+
+      if (images?.removeThumbnailId) {
+        await tx.image.update({
+          where: {
+            id: images.removeThumbnailId,
+          },
+          data: {
+            isDeleted: true,
+            deletedAt: new Date(),
+          },
+        });
+      }
+
       if (images?.files.thumbnail) {
         await this.imageService.uploadImagesTransact(
           tx,
@@ -377,41 +464,10 @@ export class BoardingHousesService {
         );
       }
 
-      if (images?.removeGalleryIds?.length) {
-        const ids = images?.removeGalleryIds;
-        for (const id of ids) {
-          await tx.image.update({
-            where: {
-              id: id,
-            },
-            data: {
-              isDeleted: true,
-              deletedAt: new Date(),
-            },
-          });
-        }
-      }
-
-      if (images?.files.thumbnail) {
-        await this.imageService.uploadImagesTransact(
-          tx,
-          images?.files.thumbnail,
-          {
-            type: 'BOARDING_HOUSE',
-            targetId: id,
-            mediaType: MediaType.THUMBNAIL,
-          },
-          {
-            resourceId: id,
-            resourceType: ResourceType.BOARDING_HOUSE,
-            mediaType: MediaType.THUMBNAIL,
-          },
-        );
-      }
       if (images?.files.gallery) {
         await this.imageService.uploadImagesTransact(
           tx,
-          images?.files.gallery,
+          images.files.gallery,
           {
             type: 'BOARDING_HOUSE',
             targetId: id,
@@ -425,7 +481,14 @@ export class BoardingHousesService {
         );
       }
 
-      return updated;
+      const houseRules =
+        await this.boardingHouseRulesService.findByBoardingHouse(id, tx);
+
+      return {
+        ...updated,
+        houseRules,
+        houseRulesContent: houseRules[0]?.content ?? '',
+      };
     });
   }
 

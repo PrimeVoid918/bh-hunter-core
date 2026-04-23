@@ -97,4 +97,8 @@ export class UpdateBoardingHouseDto {
     message: `occupancyType must be one of: ${Object.values(OccupancyType).join(', ')}`,
   })
   occupancyType?: OccupancyType;
+
+  @IsOptional()
+  @IsString()
+  houseRulesContent?: string;
 }
