@@ -10,6 +10,7 @@ import { join } from 'path';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { AgreementPreviewDto, CreateBookingAgreementDto } from './dto/dto';
 import { DBClient } from 'src/infrastructure/image/types/types';
+import { marked } from 'marked';
 
 @Injectable()
 export class AgreementsService {
@@ -439,47 +440,169 @@ export class AgreementsService {
   private async buildAgreementHtml(snapshot: Record<string, any>) {
     const template = await this.getTemplateContent();
 
-    const rulesHtml = this.buildRulesHtml(snapshot.rules ?? []);
+    const markdown = this.buildAgreementMarkdown(snapshot);
+    const content = this.renderMarkdown(markdown);
 
-    const replacements: Record<string, string> = {
-      bookingReference: this.escapeHtml(
-        String(snapshot.bookingReference ?? ''),
-      ),
-      bookingStatus: this.escapeHtml(String(snapshot.bookingStatus ?? '')),
-      checkInDate: this.formatDate(snapshot.stay?.checkInDate),
-      checkOutDate: this.formatDate(snapshot.stay?.checkOutDate),
-      occupantsCount: this.escapeHtml(
-        String(snapshot.stay?.occupantsCount ?? 1),
-      ),
-      bookingType: this.escapeHtml(String(snapshot.stay?.bookingType ?? '')),
+    return this.injectTemplate(
+      content,
+      'BH Hunter Digital Booking Agreement',
+      template,
+    );
+  }
 
-      tenantName: this.escapeHtml(String(snapshot.tenant?.name ?? '')),
-      tenantEmail: this.escapeHtml(String(snapshot.tenant?.email ?? '')),
-      tenantPhone: this.escapeHtml(String(snapshot.tenant?.phoneNumber ?? '')),
+  private renderMarkdown(markdown: string): string {
+    const result = marked.parse(markdown);
 
-      ownerName: this.escapeHtml(String(snapshot.owner?.name ?? '')),
-      ownerEmail: this.escapeHtml(String(snapshot.owner?.email ?? '')),
-      ownerPhone: this.escapeHtml(String(snapshot.owner?.phoneNumber ?? '')),
+    if (typeof result === 'string') {
+      return result;
+    }
 
-      boardingHouseName: this.escapeHtml(
-        String(snapshot.boardingHouse?.name ?? ''),
-      ),
-      boardingHouseAddress: this.escapeHtml(
-        String(snapshot.boardingHouse?.address ?? ''),
-      ),
+    throw new Error('Marked returned async result unexpectedly');
+  }
 
-      roomNumber: this.escapeHtml(String(snapshot.room?.roomNumber ?? '')),
-      roomPrice: this.formatMoney(snapshot.room?.price),
-      bookingTotalAmount: this.formatMoney(
-        snapshot.payment?.bookingTotalAmount,
-      ),
-      amountPaid: this.formatMoney(snapshot.payment?.amountPaid),
+  private injectTemplate(content: string, title: string, template: string) {
+    return template
+      .replace('{{title}}', this.escapeHtml(title))
+      .replace('{{content}}', content);
+  }
 
-      rulesHtml,
-      generatedAt: this.formatDate(snapshot.generatedAt),
-    };
+  private buildAgreementMarkdown(snapshot: Record<string, any>) {
+    const tenant = snapshot.tenant ?? {};
+    const owner = snapshot.owner ?? {};
+    const boardingHouse = snapshot.boardingHouse ?? {};
+    const room = snapshot.room ?? {};
+    const stay = snapshot.stay ?? {};
+    const payment = snapshot.payment ?? {};
+    const rules = snapshot.rules ?? [];
 
-    return this.applyTemplate(template, replacements);
+    const rulesMarkdown = rules.length
+      ? rules
+          .map(
+            (rule: any, index: number) => `
+${index + 1}. **${this.escapeHtml(rule.title ?? 'Boarding House Rule')}**  
+${this.escapeHtml(rule.content ?? '')}
+`,
+          )
+          .join('\n')
+      : 'No active boarding house rules were configured at the time of booking.';
+
+    return `
+# BH Hunter Digital Booking Agreement
+
+This Digital Booking Agreement records the booking request submitted through **BH Hunter** and the boarding house rules accepted by the tenant at the time of submission.
+
+This agreement is generated from a saved booking snapshot. It preserves the booking details and rules that were shown to and accepted by the tenant when the booking request was created.
+
+---
+
+## 1. Booking Reference
+
+| Field | Details |
+|:--- |:--- |
+| **Booking Reference** | ${this.escapeHtml(snapshot.bookingReference ?? '')} |
+| **Booking Status at Acceptance** | ${this.escapeHtml(snapshot.bookingStatus ?? '')} |
+| **Generated At** | ${this.formatDate(snapshot.generatedAt)} |
+
+---
+
+## 2. Tenant Information
+
+| Field | Details |
+|:--- |:--- |
+| **Tenant Name** | ${this.escapeHtml(tenant.name ?? '')} |
+| **Email** | ${this.escapeHtml(tenant.email ?? '')} |
+| **Phone Number** | ${this.escapeHtml(tenant.phoneNumber ?? '')} |
+
+---
+
+## 3. Owner Information
+
+| Field | Details |
+|:--- |:--- |
+| **Owner Name** | ${this.escapeHtml(owner.name ?? '')} |
+| **Email** | ${this.escapeHtml(owner.email ?? '')} |
+| **Phone Number** | ${this.escapeHtml(owner.phoneNumber ?? '')} |
+
+---
+
+## 4. Boarding House and Room Details
+
+| Field | Details |
+|:--- |:--- |
+| **Boarding House** | ${this.escapeHtml(boardingHouse.name ?? '')} |
+| **Address** | ${this.escapeHtml(boardingHouse.address ?? '')} |
+| **Room Number** | ${this.escapeHtml(room.roomNumber ?? '')} |
+| **Room Price** | PHP ${this.formatMoney(room.price)} |
+| **Maximum Capacity** | ${this.escapeHtml(String(room.maxCapacity ?? ''))} |
+
+---
+
+## 5. Stay Period
+
+| Field | Details |
+|:--- |:--- |
+| **Booking Type** | ${this.escapeHtml(stay.bookingType ?? '')} |
+| **Number of Occupants** | ${this.escapeHtml(String(stay.occupantsCount ?? 1))} |
+| **Check-In Date** | ${this.formatDate(stay.checkInDate)} |
+| **Check-Out Date** | ${this.formatDate(stay.checkOutDate)} |
+| **Date Booked** | ${this.formatDate(stay.dateBooked)} |
+
+---
+
+## 6. Booking Amount Summary
+
+| Field | Details |
+|:--- |:--- |
+| **Estimated Booking Total** | PHP ${this.formatMoney(payment.bookingTotalAmount)} |
+| **Amount Paid at Time of Agreement** | PHP ${this.formatMoney(payment.amountPaid)} |
+| **Currency** | ${this.escapeHtml(payment.currency ?? 'PHP')} |
+
+---
+
+## 7. Boarding House Rules Accepted by Tenant
+
+The tenant confirms that the following boarding house rules were displayed before the booking request was submitted:
+
+${rulesMarkdown}
+
+---
+
+## 8. Tenant Acknowledgment
+
+By submitting the booking request through BH Hunter, the tenant confirms that:
+
+1. The tenant has reviewed the boarding house rules shown above.
+2. The tenant understands that the booking request is subject to owner approval.
+3. The tenant understands that this agreement records the initial booking arrangement and accepted boarding house rules.
+4. The tenant understands that final occupancy depends on approval, payment requirements, and the agreed stay period.
+5. The tenant acknowledges that any later rule changes by the owner do not alter this saved agreement snapshot.
+
+---
+
+## 9. Owner Acknowledgment
+
+The boarding house owner acknowledges that:
+
+1. The rules shown in this agreement are the active rules associated with the boarding house at the time the tenant submitted the booking request.
+2. Any later updates to the boarding house rules are treated as live rule updates and do not overwrite this saved agreement snapshot.
+3. The owner remains responsible for ensuring that house rules are clear, accurate, and appropriate for the listed boarding house.
+
+---
+
+## 10. Platform Limitation
+
+BH Hunter acts as a booking and boarding house discovery facilitator. This agreement documents the booking request, stay details, and rules accepted through the platform. BH Hunter does not act as a court, legal representative, government authority, or dispute resolution body.
+
+---
+
+## 11. Digital Record Notice
+
+This agreement was generated electronically by BH Hunter using the saved booking agreement snapshot. The saved snapshot is the system record used to reproduce this agreement for review.
+
+---
+
+© 2026 **BH Hunter** — Boarding House Discovery and Booking Facilitation.
+`;
   }
 
   private buildRulesHtml(rules: any[]) {

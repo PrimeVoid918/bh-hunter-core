@@ -2,136 +2,106 @@
 <html>
 
 <head>
-  <meta charset="utf-8" />
-  <title>Booking Agreement</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>{{title}}</title>
+
   <style>
     body {
-      font-family: Arial, sans-serif;
-      font-size: 12px;
-      color: #222;
-      padding: 32px;
-      line-height: 1.5;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+      padding: 20px;
+      color: #1A1A1A;
+      background: #FFFFFF;
     }
 
-    h1,
-    h2,
-    h3 {
-      margin-bottom: 8px;
+    .agreement-content {
+      max-width: 860px;
+      margin: 0 auto;
     }
 
-    .section {
-      margin-top: 24px;
+    h1 {
+      font-size: 26px;
+      line-height: 1.25;
+      margin-bottom: 12px;
+      color: #123969;
     }
 
-    .box {
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      padding: 12px;
-      margin-top: 8px;
+    h2 {
+      font-size: 19px;
+      margin-top: 28px;
+      margin-bottom: 10px;
+      color: #357FC1;
+      border-bottom: 1px solid #D6ECFA;
+      padding-bottom: 6px;
+    }
+
+    p {
+      font-size: 14px;
+      margin: 10px 0;
     }
 
     table {
-      width: 100%;
       border-collapse: collapse;
-      margin-top: 8px;
+      width: 100%;
+      margin: 12px 0 18px;
+      font-size: 13px;
     }
 
     th,
     td {
-      border: 1px solid #ddd;
+      border: 1px solid #CCCCCC;
       padding: 8px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #F7F9FC;
+      font-weight: 600;
       text-align: left;
     }
 
-    ul {
-      padding-left: 18px;
+    ul,
+    ol {
+      padding-left: 22px;
     }
 
-    .muted {
-      color: #666;
+    li {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    strong {
+      font-weight: 700;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid #CCCCCC;
+      margin: 20px 0;
+    }
+
+    .footer-note {
+      margin-top: 28px;
+      padding: 12px;
+      border: 1px solid #CCCCCC;
+      border-radius: 8px;
+      background: #F7F9FC;
+      font-size: 12px;
+      color: #767474;
     }
   </style>
 </head>
 
 <body>
-  <h1>BH Hunter Booking Agreement</h1>
-  <p class="muted">
-    This document records the initial booking arrangement and advance payment
-    acknowledgment only.
-  </p>
+  <main class="agreement-content">
+    {{content}}
 
-  <div class="section">
-    <h2>Booking Details</h2>
-    <div class="box">
-      <p><strong>Reference:</strong> {{bookingReference}}</p>
-      <p><strong>Booking Status:</strong> {{bookingStatus}}</p>
-      <p><strong>Check-in Date:</strong> {{checkInDate}}</p>
-      <p><strong>Check-out Date:</strong> {{checkOutDate}}</p>
-      <p><strong>Occupants Count:</strong> {{occupantsCount}}</p>
-      <p><strong>Booking Type:</strong> {{bookingType}}</p>
+    <div class="footer-note">
+      This digital agreement is generated from the saved BH Hunter booking agreement snapshot.
     </div>
-  </div>
-
-  <div class="section">
-    <h2>Tenant and Owner</h2>
-    <table>
-      <tr>
-        <th>Party</th>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Phone</th>
-      </tr>
-      <tr>
-        <td>Tenant</td>
-        <td>{{tenantName}}</td>
-        <td>{{tenantEmail}}</td>
-        <td>{{tenantPhone}}</td>
-      </tr>
-      <tr>
-        <td>Owner</td>
-        <td>{{ownerName}}</td>
-        <td>{{ownerEmail}}</td>
-        <td>{{ownerPhone}}</td>
-      </tr>
-    </table>
-  </div>
-
-  <div class="section">
-    <h2>Property and Room</h2>
-    <div class="box">
-      <p><strong>Boarding House:</strong> {{boardingHouseName}}</p>
-      <p><strong>Address:</strong> {{boardingHouseAddress}}</p>
-      <p><strong>Room Number:</strong> {{roomNumber}}</p>
-      <p><strong>Room Price:</strong> PHP {{roomPrice}}</p>
-      <p><strong>Total Booking Amount:</strong> PHP {{bookingTotalAmount}}</p>
-      <p><strong>Amount Paid:</strong> PHP {{amountPaid}}</p>
-    </div>
-  </div>
-
-  <div class="section">
-    <h2>House Rules and Terms</h2>
-    <ul>
-      {{rulesHtml}}
-    </ul>
-  </div>
-
-  <div class="section">
-    <h2>Scope Limitation</h2>
-    <div class="box">
-      <p>
-        BH Hunter records the initial booking arrangement, owner approval,
-        payment context, and tenant acknowledgment of property-specific rules.
-      </p>
-      <p>
-        Long-term rental enforcement, monthly rent administration, and dispute
-        resolution remain outside the platform scope.
-      </p>
-    </div>
-  </div>
-
-  <div class="section">
-    <p><strong>Generated At:</strong> {{generatedAt}}</p>
-  </div>
+  </main>
 </body>
 
 </html>

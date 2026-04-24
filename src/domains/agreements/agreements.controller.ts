@@ -2,12 +2,14 @@ import {
   Header,
   Body,
   Controller,
+  Res,
   Get,
   Param,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
+import type { Response as ExpressResponse } from 'express';
 import { AgreementsService } from './agreements.service';
 import {
   AgreementPreviewDto,
@@ -57,9 +59,16 @@ export class AgreementsController {
   }
 
   @Get('bookings/:bookingId/html')
-  @Header('Content-Type', 'text/html; charset=utf-8')
-  renderAgreementHtml(@Param('bookingId') bookingId: string) {
-    return this.agreementsService.renderAgreementHtml(Number(bookingId));
+  async renderAgreementHtml(
+    @Param('bookingId') bookingId: string,
+    @Res() res: ExpressResponse,
+  ) {
+    const html = await this.agreementsService.renderAgreementHtml(
+      Number(bookingId),
+    );
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
   }
 
   @Post('bookings/:bookingId/pdf-payload')
