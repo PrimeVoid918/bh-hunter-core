@@ -3,9 +3,9 @@ export class RefundPolicy {
     const hoursBeforeCheckIn =
       (checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60);
 
-    let percentage = 0;
+    const daysBeforeCheckIn = hoursBeforeCheckIn / 24;
 
-    // 🟢 Grace period (NEW)
+    // Grace period: full refund within 1 hour after booking
     if (createdAt) {
       const hoursSinceBooking =
         (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
@@ -20,9 +20,21 @@ export class RefundPolicy {
       }
     }
 
-    if (hoursBeforeCheckIn >= 72) percentage = 1;
-    else if (hoursBeforeCheckIn >= 48) percentage = 0.75;
-    else if (hoursBeforeCheckIn >= 24) percentage = 0.5;
+    // No automatic refund once check-in time has started/passed
+    if (hoursBeforeCheckIn <= 0) {
+      return {
+        percentage: 0,
+        hoursBeforeCheckIn,
+        refundable: false,
+        status: 'NOT_REFUNDABLE',
+      };
+    }
+
+    let percentage = 0;
+
+    // Boarding-house style refund windows
+    if (daysBeforeCheckIn >= 7) percentage = 1;
+    else if (daysBeforeCheckIn >= 3) percentage = 0.5;
     else percentage = 0;
 
     return {
@@ -35,7 +47,7 @@ export class RefundPolicy {
 
   mapStatus(percentage: number) {
     if (percentage === 1) return 'FULL';
-    if (percentage >= 0.75) return 'PARTIAL';
+    if (percentage >= 0.5) return 'PARTIAL';
     if (percentage > 0) return 'ELIGIBLE';
     return 'NOT_REFUNDABLE';
   }
