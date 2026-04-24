@@ -475,6 +475,11 @@ export class BookingsService {
       null;
 
     const paidCharges = booking.charges.filter((c) => c.status === 'PAID');
+    const latestExtensionRequest =
+      await this.prisma.bookingExtensionRequest.findFirst({
+        where: { bookingId: bookId },
+        orderBy: { createdAt: 'desc' },
+      });
 
     return {
       bookingId: booking.id,
@@ -498,6 +503,24 @@ export class BookingsService {
         paidAt: charge.paidAt,
         paymentStatus: charge.payment?.status ?? null,
       })),
+      extensionRequest: latestExtensionRequest
+        ? {
+            id: latestExtensionRequest.id,
+            bookingId: latestExtensionRequest.bookingId,
+            tenantId: latestExtensionRequest.tenantId,
+            ownerId: latestExtensionRequest.ownerId,
+            currentCheckOutDate: latestExtensionRequest.currentCheckOutDate,
+            requestedCheckOutDate: latestExtensionRequest.requestedCheckOutDate,
+            status: latestExtensionRequest.status,
+            reason: latestExtensionRequest.reason,
+            ownerMessage: latestExtensionRequest.ownerMessage,
+            extensionChargeId: latestExtensionRequest.extensionChargeId,
+            approvedAt: latestExtensionRequest.approvedAt,
+            paidAt: latestExtensionRequest.paidAt,
+            createdAt: latestExtensionRequest.createdAt,
+            updatedAt: latestExtensionRequest.updatedAt,
+          }
+        : null,
       totals: {
         totalCharges: booking.charges.length,
         paidCharges: paidCharges.length,
