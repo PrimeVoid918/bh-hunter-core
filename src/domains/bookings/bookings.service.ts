@@ -39,6 +39,7 @@ import { BookingEventPublisher } from './events/bookings.publisher';
 import { PaymentsService } from '../payments/payments.service';
 import { RefundPolicy } from './refund.policy';
 import { Logger } from 'src/common/logger/logger.service';
+import { AgreementsService } from '../agreements/agreements.service';
 
 /**
  * TODO: to do, owner cannot accept or do anything on the bookings if they ran out of subs
@@ -54,6 +55,7 @@ export class BookingsService {
     private readonly bookingEventPublisher: BookingEventPublisher,
     private readonly refundPolicy: RefundPolicy,
     private readonly logger: Logger,
+    private readonly agreementsService: AgreementsService,
   ) {}
 
   private get prisma() {
@@ -65,6 +67,12 @@ export class BookingsService {
 
     if (occupants <= 0) {
       throw new BadRequestException('Invalid occupants count');
+    }
+
+    if (!booking.tenantAcceptedTerms) {
+      throw new BadRequestException(
+        'You must accept the boarding house rules before submitting a booking request.',
+      );
     }
 
     const now = new Date();
@@ -90,81 +98,94 @@ export class BookingsService {
       );
     }
 
-    const room = await this.prisma.room.findUnique({
-      where: { id: roomId },
-      select: {
-        id: true,
-        boardingHouseId: true,
-        boardingHouse: true,
-        price: true,
-        maxCapacity: true,
-        currentCapacity: true,
-      },
-    });
+    const result = await this.prisma.$transaction(async (tx) => {
+      const room = await tx.room.findUnique({
+        where: { id: roomId },
+        select: {
+          id: true,
+          boardingHouseId: true,
+          boardingHouse: true,
+          price: true,
+          maxCapacity: true,
+          currentCapacity: true,
+        },
+      });
 
-    if (!room) {
-      throw new NotFoundException(`Room ${roomId} not found`);
-    }
+      if (!room) {
+        throw new NotFoundException(`Room ${roomId} not found`);
+      }
 
-    if (room.currentCapacity + occupants > room.maxCapacity) {
-      throw new BadRequestException(
-        `Room capacity exceeded. Available slots: ${
-          room.maxCapacity - room.currentCapacity
-        }`,
-      );
-    }
+      if (room.currentCapacity + occupants > room.maxCapacity) {
+        throw new BadRequestException(
+          `Room capacity exceeded. Available slots: ${
+            room.maxCapacity - room.currentCapacity
+          }`,
+        );
+      }
 
-    const totalAmount = new Prisma.Decimal(room.price).mul(occupants);
+      const totalAmount = new Prisma.Decimal(room.price).mul(occupants);
 
-    const bookingResult = await this.prisma.booking.create({
-      data: {
-        room: { connect: { id: roomId } },
-        tenant: { connect: { id: booking.tenantId } },
-        boardingHouse: { connect: { id: room.boardingHouseId } },
-
-        occupantsCount: occupants,
-
-        checkInDate: booking.startDate,
-        checkOutDate: booking.endDate,
-
-        reference: `BK-${Date.now()}`,
-        dateBooked: new Date(),
-
-        status: BookingStatus.PENDING_REQUEST,
-        totalAmount,
-        currency: CurrencyType.PHP,
-        tenantMessage: booking.note ?? null,
-      },
-      include: {
-        tenant: {
-          select: {
-            firstname: true,
-            lastname: true,
+      const bookingResult = await tx.booking.create({
+        data: {
+          room: { connect: { id: roomId } },
+          tenant: { connect: { id: booking.tenantId } },
+          boardingHouse: { connect: { id: room.boardingHouseId } },
+          occupantsCount: occupants,
+          checkInDate: booking.startDate,
+          checkOutDate: booking.endDate,
+          reference: `BK-${Date.now()}`,
+          dateBooked: new Date(),
+          status: BookingStatus.PENDING_REQUEST,
+          totalAmount,
+          currency: CurrencyType.PHP,
+          tenantMessage: booking.note ?? null,
+        },
+        include: {
+          tenant: {
+            select: {
+              firstname: true,
+              lastname: true,
+            },
           },
         },
-      },
+      });
+
+      const agreement = await this.agreementsService.createAcceptedForBookingTx(
+        tx,
+        bookingResult.id,
+        booking.termsVersion,
+      );
+
+      return {
+        bookingResult,
+        agreement,
+        room,
+      };
     });
 
     this.bookingEventPublisher.requested({
-      bookingId: bookingResult.id,
-      tenantId: bookingResult.tenantId,
+      bookingId: result.bookingResult.id,
+      tenantId: result.bookingResult.tenantId,
       tenant: {
-        firstname: bookingResult.tenant.firstname,
-        lastname: bookingResult.tenant.lastname,
+        firstname: result.bookingResult.tenant.firstname,
+        lastname: result.bookingResult.tenant.lastname,
       },
       data: {
-        ownerId: room.boardingHouse.ownerId,
-        tenantId: bookingResult.tenantId,
-        roomId: room.id,
-        bhId: room.boardingHouseId,
+        ownerId: result.room.boardingHouse.ownerId,
+        tenantId: result.bookingResult.tenantId,
+        roomId: result.room.id,
+        bhId: result.room.boardingHouseId,
         resourceType: PrismaResourceType.BOOKING,
       },
-      ownerId: room.boardingHouse.ownerId,
-      roomId: roomId,
-      boardingHouseId: room.boardingHouseId,
+      ownerId: result.room.boardingHouse.ownerId,
+      roomId,
+      boardingHouseId: result.room.boardingHouseId,
     });
 
-    return bookingResult;
+    return {
+      ...result.bookingResult,
+      agreement: result.agreement,
+    };
   }
 
   async findAll(filter: FindAllBookingFilterDto) {

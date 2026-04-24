@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
@@ -8,6 +9,7 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { AgreementPreviewDto, CreateBookingAgreementDto } from './dto/dto';
+import { DBClient } from 'src/infrastructure/image/types/types';
 
 @Injectable()
 export class AgreementsService {
@@ -18,6 +20,65 @@ export class AgreementsService {
 
   private get prisma() {
     return this.database.getClient();
+  }
+
+  async getAgreementReviewInfo(bookingId: number) {
+    const agreement = await this.prisma.bookingAgreement.findUnique({
+      where: { bookingId },
+    });
+
+    if (!agreement) {
+      throw new NotFoundException('Booking agreement not found');
+    }
+
+    const currentRules = await this.prisma.boardingHouseRule.findMany({
+      where: {
+        boardingHouseId: agreement.boardingHouseId,
+        isActive: true,
+      },
+      orderBy: {
+        sortOrder: 'asc',
+      },
+    });
+
+    const currentTermsVersion = this.resolveTermsVersion(currentRules);
+    const acceptedTermsVersion = agreement.termsVersion;
+
+    const hasNewRules = currentTermsVersion !== acceptedTermsVersion;
+
+    return {
+      bookingId,
+      agreementId: agreement.id,
+      agreementStatus: agreement.status,
+      acceptedTermsVersion,
+      currentTermsVersion,
+      hasNewRules,
+      tenantAcceptedAt: agreement.tenantAcceptedAt,
+      pdfUrl: agreement.pdfUrl,
+      htmlUrl: `/api/agreements/bookings/${bookingId}/html`,
+      currentRules: currentRules.map((rule) => ({
+        id: rule.id,
+        title: rule.title,
+        content: rule.content,
+        isRequired: rule.isRequired,
+        version: rule.version,
+      })),
+      message: hasNewRules
+        ? 'The boarding house rules have been updated after this booking agreement was accepted. The saved agreement still contains the original accepted rules.'
+        : 'The accepted agreement is up to date with the current active rules.',
+    };
+  }
+
+  async renderAgreementHtml(bookingId: number) {
+    const agreement = await this.prisma.bookingAgreement.findUnique({
+      where: { bookingId },
+    });
+
+    if (!agreement) {
+      throw new NotFoundException('Booking agreement not found');
+    }
+
+    return this.buildAgreementHtml(agreement.snapshot as Record<string, any>);
   }
 
   async getPreview(dto: AgreementPreviewDto) {
@@ -103,7 +164,43 @@ export class AgreementsService {
   }
 
   async createForBooking(bookingId: number, body?: CreateBookingAgreementDto) {
-    const prisma = this.prisma;
+    return this.createForBookingWithClient(this.prisma, bookingId, body);
+  }
+
+  async createAcceptedForBookingTx(
+    tx: DBClient,
+    bookingId: number,
+    termsVersion?: string,
+  ) {
+    return this.createForBookingWithClient(tx, bookingId, {
+      tenantAccepted: true,
+      termsVersion,
+    });
+  }
+
+  private async createForBookingWithClient(
+    prisma: DBClient,
+    bookingId: number,
+    body?: CreateBookingAgreementDto,
+  ) {
+    const tenantAccepted = body?.tenantAccepted === true;
+
+    // Since your current booking flow requires agreement before submit,
+    // reject creating agreement without acceptance.
+    if (!tenantAccepted) {
+      throw new BadRequestException(
+        'Tenant must accept the boarding house rules before submitting a booking request.',
+      );
+    }
+
+    const existing = await prisma.bookingAgreement.findUnique({
+      where: { bookingId },
+    });
+
+    // Important: do not overwrite snapshot after it exists.
+    if (existing) {
+      return existing;
+    }
 
     const booking = await prisma.booking.findFirst({
       where: {
@@ -140,32 +237,27 @@ export class AgreementsService {
       },
     });
 
-    const snapshot = this.buildSnapshot(booking, rules);
-    const acceptedAt = body?.tenantAccepted ? new Date() : null;
+    const currentTermsVersion = this.resolveTermsVersion(rules);
 
-    return prisma.bookingAgreement.upsert({
-      where: {
-        bookingId,
-      },
-      update: {
-        tenantId: booking.tenantId,
-        ownerId: booking.boardingHouse.ownerId,
-        boardingHouseId: booking.boardingHouseId,
-        roomId: booking.roomId,
-        snapshot,
-        termsVersion: body?.termsVersion ?? this.resolveTermsVersion(rules),
-        status: body?.tenantAccepted ? 'ACCEPTED' : 'PENDING',
-        tenantAcceptedAt: acceptedAt,
-      },
-      create: {
+    if (body?.termsVersion && body.termsVersion !== currentTermsVersion) {
+      throw new ConflictException(
+        'Boarding house rules changed. Please refresh the agreement preview and accept again.',
+      );
+    }
+
+    const snapshot = this.buildSnapshot(booking, rules);
+    const acceptedAt = new Date();
+
+    return prisma.bookingAgreement.create({
+      data: {
         bookingId,
         tenantId: booking.tenantId,
         ownerId: booking.boardingHouse.ownerId,
         boardingHouseId: booking.boardingHouseId,
         roomId: booking.roomId,
         snapshot,
-        termsVersion: body?.termsVersion ?? this.resolveTermsVersion(rules),
-        status: body?.tenantAccepted ? 'ACCEPTED' : 'PENDING',
+        termsVersion: currentTermsVersion,
+        status: 'ACCEPTED',
         tenantAcceptedAt: acceptedAt,
       },
     });
@@ -232,10 +324,6 @@ export class AgreementsService {
   }
 
   async createAndPreparePdf(bookingId: number) {
-    await this.createForBooking(bookingId, {
-      tenantAccepted: true,
-    });
-
     return this.generatePdfPayload(bookingId);
   }
 
@@ -349,16 +437,8 @@ export class AgreementsService {
   }
 
   private async buildAgreementHtml(snapshot: Record<string, any>) {
-    const templatePath = join(
-      process.cwd(),
-      'src',
-      'domains',
-      'agreements',
-      'templates',
-      'booking-agreement.template.html',
-    );
+    const template = await this.getTemplateContent();
 
-    const template = await readFile(templatePath, 'utf-8');
     const rulesHtml = this.buildRulesHtml(snapshot.rules ?? []);
 
     const replacements: Record<string, string> = {

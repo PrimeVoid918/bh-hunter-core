@@ -9,6 +9,7 @@ import {
   Min,
   Max,
   IsDateString,
+  IsBoolean,
 } from 'class-validator';
 
 import { BookingStatus, BookingType } from '@prisma/client';
@@ -40,6 +41,13 @@ export class CreateBookingDto {
   @Min(1)
   @Max(10)
   occupantsCount?: number;
+
+  @IsBoolean()
+  tenantAcceptedTerms!: boolean;
+
+  @IsOptional()
+  @IsString()
+  termsVersion?: string;
 }
 
 /**

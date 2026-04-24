@@ -1,4 +1,5 @@
 import {
+  Header,
   Body,
   Controller,
   Get,
@@ -48,6 +49,17 @@ export class AgreementsController {
   @Get('bookings/:bookingId')
   getByBooking(@Param('bookingId') bookingId: string) {
     return this.agreementsService.getByBooking(Number(bookingId));
+  }
+
+  @Get('bookings/:bookingId/review')
+  getAgreementReviewInfo(@Param('bookingId') bookingId: string) {
+    return this.agreementsService.getAgreementReviewInfo(Number(bookingId));
+  }
+
+  @Get('bookings/:bookingId/html')
+  @Header('Content-Type', 'text/html; charset=utf-8')
+  renderAgreementHtml(@Param('bookingId') bookingId: string) {
+    return this.agreementsService.renderAgreementHtml(Number(bookingId));
   }
 
   @Post('bookings/:bookingId/pdf-payload')
