@@ -176,19 +176,75 @@ function mapChargeToItem(
   charge: BookingStatusChargeForStatement,
 ): BillingStatementItem {
   const amount = toNumberAmount(charge.amount);
+  const metadata = asRecord(charge.metadata);
+
+  const adjustments = normalizeAdjustments(metadata?.adjustments);
+  const adjustmentsTotal = sum(adjustments.map((item) => item.amount));
+
+  const baseAmount =
+    charge.type === 'EXTENSION_PAYMENT' &&
+    metadata?.baseExtensionAmount !== undefined
+      ? toNumberAmount(metadata.baseExtensionAmount)
+      : null;
 
   return {
     chargeId: charge.id,
     type: charge.type,
     label: getChargeLabel(charge.type),
-    description: getChargeDescription(charge.type),
+    description: charge.description ?? getChargeDescription(charge.type),
     amount,
     amountText: formatPeso(amount),
     status: String(charge.status),
     paymentStatus: charge.paymentStatus ? String(charge.paymentStatus) : null,
     dueDate: charge.dueDate,
     paidAt: charge.paidAt,
+
+    metadata,
+
+    baseAmount,
+    baseAmountText: baseAmount !== null ? formatPeso(baseAmount) : null,
+    adjustments,
+    adjustmentsTotal,
+    adjustmentsTotalText: formatPeso(adjustmentsTotal),
   };
+}
+
+function asRecord(value: unknown): Record<string, any> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as Record<string, any>;
+}
+
+function normalizeAdjustments(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+
+      const record = item as Record<string, any>;
+      const label = String(record.label ?? '').trim();
+      const amount = toNumberAmount(record.amount);
+
+      if (!label || amount <= 0) return null;
+
+      return {
+        label,
+        amount,
+        amountText: formatPeso(amount),
+      };
+    })
+    .filter(
+      (
+        item,
+      ): item is {
+        label: string;
+        amount: number;
+        amountText: string;
+      } => item !== null,
+    );
 }
 
 export function renderBillingStatementHtml(
@@ -231,6 +287,38 @@ function pickStatementForHtml(
   return response.initialBillingStatement;
 }
 
+function renderAdjustmentBreakdown(item: BillingStatementItem): string {
+  if (item.type !== 'EXTENSION_PAYMENT') return '';
+  if (!item.adjustments?.length) return '';
+
+  const baseAmountHtml =
+    item.baseAmount !== null && item.baseAmount !== undefined
+      ? `<div class="breakdown-row">
+          <span>Base extension amount</span>
+          <strong>${escapeHtml(item.baseAmountText ?? formatPeso(item.baseAmount))}</strong>
+        </div>`
+      : '';
+
+  const adjustmentRows = item.adjustments
+    .map(
+      (adjustment) => `<div class="breakdown-row">
+        <span>${escapeHtml(adjustment.label)}</span>
+        <strong>${escapeHtml(adjustment.amountText)}</strong>
+      </div>`,
+    )
+    .join('');
+
+  return `<div class="breakdown">
+    <div class="breakdown-title">Extension Breakdown</div>
+    ${baseAmountHtml}
+    ${adjustmentRows}
+    <div class="breakdown-row breakdown-total">
+      <span>Total extension due</span>
+      <strong>${escapeHtml(item.amountText)}</strong>
+    </div>
+  </div>`;
+}
+
 function renderSingleStatementHtml(
   response: BillingStatementResponse,
   statement: BillingStatement,
@@ -238,15 +326,16 @@ function renderSingleStatementHtml(
   const rows = statement.items
     .map(
       (item) => `<tr>
-        <td>
-          <strong>${escapeHtml(item.label)}</strong>
-          <div class="muted">${escapeHtml(item.description)}</div>
-          ${item.dueDate ? `<div class="muted">Due: ${escapeHtml(formatDate(item.dueDate))}</div>` : ''}
-          ${item.paidAt ? `<div class="muted">Paid: ${escapeHtml(formatDate(item.paidAt))}</div>` : ''}
-        </td>
-        <td>${escapeHtml(item.status)}</td>
-        <td class="amount">${escapeHtml(item.amountText)}</td>
-      </tr>`,
+      <td>
+        <strong>${escapeHtml(item.label)}</strong>
+        <div class="muted">${escapeHtml(item.description)}</div>
+        ${renderAdjustmentBreakdown(item)}
+        ${item.dueDate ? `<div class="muted">Due: ${escapeHtml(formatDate(item.dueDate))}</div>` : ''}
+        ${item.paidAt ? `<div class="muted">Paid: ${escapeHtml(formatDate(item.paidAt))}</div>` : ''}
+      </td>
+      <td>${escapeHtml(item.status)}</td>
+      <td class="amount">${escapeHtml(item.amountText)}</td>
+    </tr>`,
     )
     .join('');
 
@@ -313,6 +402,41 @@ function renderSingleStatementHtml(
       line-height: 1.5;
       margin: 0;
     }
+
+    .breakdown {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #edf0f3;
+  border-radius: 10px;
+  background: #f9fafb;
+}
+
+.breakdown-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #666;
+  margin: 4px 0;
+}
+
+.breakdown-row strong {
+  color: #222;
+}
+
+.breakdown-total {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 6px;
+  margin-top: 6px;
+  font-weight: 700;
+}
 
     .top {
       display: flex;

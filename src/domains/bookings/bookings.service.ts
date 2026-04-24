@@ -528,6 +528,8 @@ export class BookingsService {
         dueDate: charge.dueDate,
         paidAt: charge.paidAt,
         paymentStatus: charge.payment?.status ?? null,
+        description: charge.description ?? null,
+        metadata: charge.metadata ?? null,
       })),
       extensionRequest: latestExtensionRequest
         ? {

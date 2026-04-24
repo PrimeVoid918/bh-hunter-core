@@ -31,6 +31,12 @@ export type PaymentStatusForStatement =
   | 'EXPIRED'
   | null;
 
+export interface BillingStatementAdjustment {
+  label: string;
+  amount: number;
+  amountText: string;
+}
+
 export interface BookingStatusChargeForStatement {
   id: number;
   type: BookingChargeTypeForStatement | string;
@@ -39,6 +45,9 @@ export interface BookingStatusChargeForStatement {
   dueDate: Date | string | null;
   paidAt: Date | string | null;
   paymentStatus: PaymentStatusForStatement | string;
+
+  description?: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 export interface BookingStatusResultForStatement {
@@ -80,6 +89,14 @@ export interface BillingStatementItem {
   paymentStatus: string | null;
   dueDate: Date | string | null;
   paidAt: Date | string | null;
+
+  metadata?: Record<string, any> | null;
+
+  baseAmount?: number | null;
+  baseAmountText?: string | null;
+  adjustments?: BillingStatementAdjustment[];
+  adjustmentsTotal?: number;
+  adjustmentsTotalText?: string;
 }
 
 export interface BillingStatementTotals {
