@@ -7,6 +7,8 @@ import {
   Param,
   Query,
   ParseIntPipe,
+  Header,
+  Res,
 } from '@nestjs/common';
 import { BookingsService } from './bookings.service';
 import {
@@ -21,6 +23,7 @@ import {
 } from './dto/dtos';
 import { ApiTags } from '@nestjs/swagger';
 import { PaymentsService } from '../payments/payments.service';
+import { Response } from 'express';
 
 @ApiTags('bookings')
 @Controller('bookings')
@@ -73,6 +76,26 @@ export class BookingsController {
   @Get(':id/status')
   getBookingStatus(@Param('id', ParseIntPipe) id: number) {
     return this.bookingsService.getBookingStatus(id);
+  }
+
+  @Get(':id/billing-statements')
+  getBillingStatements(@Param('id', ParseIntPipe) id: number) {
+    return this.bookingsService.getBillingStatements(id);
+  }
+
+  @Get(':id/billing-statements/html')
+  async getBillingStatementsHtml(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('type') type: 'INITIAL_BOOKING' | 'EXTENSION' = 'INITIAL_BOOKING',
+    @Query('chargeId') chargeId: string | undefined,
+    @Res() res: Response,
+  ) {
+    const html = await this.bookingsService.getBillingStatementsHtml(id, {
+      type,
+      chargeId: chargeId ? Number(chargeId) : undefined,
+    });
+
+    return res.type('text/html').send(html);
   }
 
   @Get(':id/payment')

@@ -40,6 +40,11 @@ import { PaymentsService } from '../payments/payments.service';
 import { RefundPolicy } from './refund.policy';
 import { Logger } from 'src/common/logger/logger.service';
 import { AgreementsService } from '../agreements/agreements.service';
+import {
+  buildBillingStatementResponse,
+  // renderBillingStatementsHtml,
+  renderBillingStatementHtml,
+} from './billing-statments/billing-statement.presenter';
 
 /**
  * TODO: to do, owner cannot accept or do anything on the bookings if they ran out of subs
@@ -549,6 +554,24 @@ export class BookingsService {
           .length,
       },
     };
+  }
+
+  async getBillingStatements(bookId: number) {
+    const bookingStatus = await this.getBookingStatus(bookId);
+
+    return buildBillingStatementResponse(bookingStatus);
+  }
+
+  async getBillingStatementsHtml(
+    bookId: number,
+    options?: {
+      type?: 'INITIAL_BOOKING' | 'EXTENSION';
+      chargeId?: number;
+    },
+  ) {
+    const billingStatements = await this.getBillingStatements(bookId);
+
+    return renderBillingStatementHtml(billingStatements, options);
   }
 
   async previewRefund(bookId: number) {
@@ -1681,6 +1704,23 @@ export class BookingsService {
       );
     }
 
+    const rawAdjustments = payload.adjustments ?? [];
+
+    const adjustments = rawAdjustments
+      .map((item) => ({
+        label: String(item.label ?? '').trim(),
+        amount: Number(item.amount ?? 0),
+      }))
+      .filter((item) => item.label.length > 0 && item.amount > 0);
+
+    const adjustmentsTotal = adjustments.reduce(
+      (sum, item) => sum + item.amount,
+      0,
+    );
+
+    const totalExtensionAmount =
+      Number(payload.extensionAmount) + adjustmentsTotal;
+
     const result = await this.prisma.$transaction(async (tx) => {
       const latestCharge = await tx.bookingCharge.findFirst({
         where: { bookingId: bookId },
@@ -1695,21 +1735,27 @@ export class BookingsService {
           bookingId: bookId,
           type: BookingChargeType.EXTENSION_PAYMENT,
           status: BookingChargeStatus.PENDING,
-          amount: new Prisma.Decimal(payload.extensionAmount),
+          amount: new Prisma.Decimal(totalExtensionAmount),
           currency: CurrencyType.PHP,
           sequence: nextSequence,
           isRequired: true,
           dueDate: extension.currentCheckOutDate,
-          description: 'Extension payment approved by owner',
+          description: adjustments.length
+            ? 'Extension payment with utility adjustments'
+            : 'Extension payment approved by owner',
           metadata: {
             extensionRequestId: extension.id,
             currentCheckOutDate: extension.currentCheckOutDate.toISOString(),
             requestedCheckOutDate:
               extension.requestedCheckOutDate.toISOString(),
+
+            baseExtensionAmount: Number(payload.extensionAmount),
+            adjustments,
+            adjustmentsTotal,
+            totalExtensionAmount,
           },
         },
       });
-
       const updatedExtension = await tx.bookingExtensionRequest.update({
         where: { id: extension.id },
         data: {

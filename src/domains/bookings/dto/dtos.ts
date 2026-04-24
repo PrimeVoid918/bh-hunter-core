@@ -10,6 +10,8 @@ import {
   Max,
   IsDateString,
   IsBoolean,
+  IsArray,
+  ValidateNested,
 } from 'class-validator';
 
 import { BookingStatus, BookingType } from '@prisma/client';
@@ -242,6 +244,16 @@ export class RequestExtensionDto {
   reason?: string;
 }
 
+export class ExtensionAdjustmentDto {
+  @IsString()
+  label!: string;
+
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  amount!: number;
+}
+
 export class ApproveExtensionDto {
   @IsNumber()
   ownerId!: number;
@@ -253,6 +265,12 @@ export class ApproveExtensionDto {
   @IsOptional()
   @IsString()
   message?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExtensionAdjustmentDto)
+  adjustments?: ExtensionAdjustmentDto[];
 }
 
 export class RejectExtensionDto {

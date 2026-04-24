@@ -218,10 +218,12 @@ model Tenant {
   role                  UserRole               @default(TENANT) // changed
   hasAcceptedPolicies   Boolean                @default(false)
   policiesAcceptedAt    DateTime?
-  policiesVersion       String? // NEW
+  policiesVersion       String?
   isActive              Boolean                @default(true)
   registrationStatus    RegistrationStatus     @default(PENDING)
   verificationLevel     VerificationLevel      @default(UNVERIFIED)
+  isSuspended           Boolean                @default(false)
+  suspendedAt           DateTime               @default(now())
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   age                   Int?                   @default(0)
@@ -245,8 +247,10 @@ model Owner {
   role                  UserRole               @default(OWNER)
   hasAcceptedPolicies   Boolean                @default(false)
   policiesAcceptedAt    DateTime?
-  policiesVersion       String? // NEW
+  policiesVersion       String?
   isActive              Boolean                @default(true)
+  isSuspended           Boolean                @default(false)
+  suspendedAt           DateTime               @default(now())
   registrationStatus    RegistrationStatus     @default(PENDING)
   verificationLevel     VerificationLevel      @default(UNVERIFIED)
   createdAt             DateTime               @default(now())

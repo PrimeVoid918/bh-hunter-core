@@ -420,10 +420,26 @@ export class AgreementsService {
       ),
       join(
         process.cwd(),
+        'src',
+        'domains',
+        'agreements',
+        'template',
+        'booking-agreement.template.html',
+      ),
+      join(
+        process.cwd(),
         'dist',
         'domains',
         'agreements',
         'templates',
+        'booking-agreement.template.html',
+      ),
+      join(
+        process.cwd(),
+        'dist',
+        'domains',
+        'agreements',
+        'template',
         'booking-agreement.template.html',
       ),
     ];
@@ -434,7 +450,106 @@ export class AgreementsService {
       } catch {}
     }
 
-    throw new NotFoundException('Booking agreement template file not found');
+    return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{title}}</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+      padding: 20px;
+      color: #1A1A1A;
+      background: #FFFFFF;
+    }
+
+    .agreement-content {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 26px;
+      line-height: 1.25;
+      margin-bottom: 12px;
+      color: #123969;
+    }
+
+    h2 {
+      font-size: 19px;
+      margin-top: 28px;
+      margin-bottom: 10px;
+      color: #357FC1;
+      border-bottom: 1px solid #D6ECFA;
+      padding-bottom: 6px;
+    }
+
+    p {
+      font-size: 14px;
+      margin: 10px 0;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0 18px;
+      font-size: 13px;
+    }
+
+    th,
+    td {
+      border: 1px solid #CCCCCC;
+      padding: 8px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #F7F9FC;
+      font-weight: 600;
+      text-align: left;
+    }
+
+    ul,
+    ol {
+      padding-left: 22px;
+    }
+
+    li {
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    hr {
+      border: none;
+      border-top: 1px solid #CCCCCC;
+      margin: 20px 0;
+    }
+
+    .footer-note {
+      margin-top: 28px;
+      padding: 12px;
+      border: 1px solid #CCCCCC;
+      border-radius: 8px;
+      background: #F7F9FC;
+      font-size: 12px;
+      color: #767474;
+    }
+  </style>
+</head>
+<body>
+  <main class="agreement-content">
+    {{content}}
+
+    <div class="footer-note">
+      This digital agreement is generated from the saved BH Hunter booking agreement snapshot.
+    </div>
+  </main>
+</body>
+</html>
+`;
   }
 
   private async buildAgreementHtml(snapshot: Record<string, any>) {
