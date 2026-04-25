@@ -17,10 +17,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, new ExpressAdapter(server));
   const configService = app.get(ConfigService);
 
-  const publicPath =
-    process.env.NODE_ENV !== 'production'
-      ? join(process.cwd(), 'public')
-      : join(__dirname, '..', 'public');
+  const publicPath = join(process.cwd(), 'public');
 
   // 1️⃣ Global JSON parser for all endpoints
 
@@ -46,6 +43,27 @@ async function bootstrap() {
     );
     next();
   });
+
+  // Static file serving
+  server.use(express.static(publicPath));
+  server.use(
+    '/downloads',
+    express.static(join(publicPath, 'downloads'), {
+      fallthrough: false,
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.apk')) {
+          res.setHeader(
+            'Content-Type',
+            'application/vnd.android.package-archive',
+          );
+          res.setHeader(
+            'Content-Disposition',
+            'attachment; filename="bh-hunter-latest.apk"',
+          );
+        }
+      },
+    }),
+  );
 
   // Static file serving
   server.use(express.static(publicPath));

@@ -71,6 +71,7 @@ export default function Hero() {
             <Button
               variant="contained"
               size="large"
+              href="/download"
               sx={{
                 py: 1.5,
                 px: 4,
