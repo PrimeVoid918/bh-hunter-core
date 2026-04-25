@@ -11,7 +11,8 @@ import {
   DialogContent,
   DialogActions,
   IconButton,
-  useTheme,
+  CircularProgress,
+  Chip,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -21,6 +22,7 @@ import {
 import { FindOneOwner } from '@/infrastructure/owner/owner.types';
 import { FindOneTenant } from '@/infrastructure/tenants/tenant.types';
 import { parseIsoDate } from '@/infrastructure/utils/parseISODate.util';
+import { useGetOneQuery as useGetOneOwnerQuery } from '@/infrastructure/owner/owner.redux.api';
 
 export type UserTableRow = FindOneOwner | FindOneTenant;
 
@@ -39,8 +41,17 @@ export default function UserTableInfo({
   onDelete,
   onCloseParent,
 }: UserTableInfoProps) {
-  const theme = useTheme();
-  const [open, setOpen] = useState(true); // Open by default when modal mounts
+  const [open, setOpen] = useState(true);
+
+  const ownerId = Number(rowData.id);
+
+  const { data: ownerDetails, isFetching: isOwnerDetailsFetching } =
+    useGetOneOwnerQuery(ownerId, {
+      skip: thisTableIsFor !== 'OWNER' || !ownerId,
+    });
+
+  const displayData =
+    thisTableIsFor === 'OWNER' && ownerDetails ? ownerDetails : rowData;
 
   const handleClose = () => {
     setOpen(false);
@@ -48,9 +59,14 @@ export default function UserTableInfo({
   };
 
   const fullName =
-    `${rowData.firstname ?? ''} ${rowData.lastname ?? ''}`.trim();
-  const createdAt = parseIsoDate(rowData.createdAt)?.dateTime ?? 'N/A';
-  const updatedAt = parseIsoDate(rowData.updatedAt)?.dateTime ?? 'N/A';
+    `${displayData.firstname ?? ''} ${displayData.lastname ?? ''}`.trim() ||
+    displayData.username ||
+    '—';
+
+  const createdAt = parseIsoDate(displayData.createdAt)?.dateTime ?? 'N/A';
+  const updatedAt = parseIsoDate(displayData.updatedAt)?.dateTime ?? 'N/A';
+
+  const isInactive = displayData.isActive === false;
 
   return (
     <Dialog
@@ -66,88 +82,142 @@ export default function UserTableInfo({
         },
       }}
     >
-      {/* Close Button */}
       <Box sx={{ position: 'absolute', right: 12, top: 12, zIndex: 10 }}>
         <IconButton onClick={handleClose} size="small">
           <CloseIcon fontSize="small" />
         </IconButton>
       </Box>
 
-      <DialogTitle>{thisTableIsFor} Details</DialogTitle>
+      <DialogTitle>
+        <Stack direction="row" alignItems="center" spacing={1}>
+          <Typography fontWeight={800}>{thisTableIsFor} Details</Typography>
+
+          <Chip
+            size="small"
+            label={isInactive ? 'Inactive' : 'Active'}
+            color={isInactive ? 'error' : 'success'}
+          />
+        </Stack>
+      </DialogTitle>
 
       <DialogContent dividers>
-        <Stack spacing={2}>
-          <InfoRow label="Full Name" value={fullName || '—'} />
-          <InfoRow label="Username" value={rowData.username} />
-          <InfoRow label="Email" value={rowData.email ?? '—'} />
-          {thisTableIsFor === 'TENANT' && (
+        {thisTableIsFor === 'OWNER' && isOwnerDetailsFetching ? (
+          <Stack alignItems="center" justifyContent="center" py={4} spacing={2}>
+            <CircularProgress size={28} />
+            <Typography variant="body2" color="text.secondary">
+              Loading full owner details...
+            </Typography>
+          </Stack>
+        ) : (
+          <Stack spacing={2}>
+            <InfoRow label="Full Name" value={fullName} />
+            <InfoRow label="Username" value={displayData.username ?? '—'} />
+            <InfoRow label="Email" value={displayData.email ?? '—'} />
+
+            {thisTableIsFor === 'TENANT' && (
+              <InfoRow
+                label="Guardian"
+                value={(displayData as FindOneTenant).guardian ?? '—'}
+              />
+            )}
+
+            {thisTableIsFor === 'OWNER' && (
+              <>
+                <InfoRow
+                  label="Phone"
+                  value={(displayData as FindOneOwner).phone_number ?? '—'}
+                />
+
+                <InfoRow
+                  label="Address"
+                  value={(displayData as FindOneOwner).address ?? '—'}
+                />
+
+                <InfoRow
+                  label="Age"
+                  value={(displayData as FindOneOwner).age?.toString() ?? '—'}
+                />
+
+                <InfoRow
+                  label="Consent Accepted"
+                  value={
+                    (displayData as FindOneOwner).policiesAcceptedAt
+                      ? (parseIsoDate(
+                          (displayData as FindOneOwner).policiesAcceptedAt,
+                        )?.dateOnly ?? 'Yes')
+                      : 'No'
+                  }
+                />
+
+                <InfoRow
+                  label="Legitimacy Consent"
+                  value={
+                    (displayData as FindOneOwner).hasAcceptedPolicies
+                      ? 'Yes'
+                      : 'No'
+                  }
+                />
+
+                <InfoRow
+                  label="Boarding Houses"
+                  value={String(
+                    (displayData as FindOneOwner).boardingHouses?.length ?? 0,
+                  )}
+                />
+
+                <InfoRow
+                  label="Verification Documents"
+                  value={String(
+                    (displayData as FindOneOwner).verificationDocuments
+                      ?.length ?? 0,
+                  )}
+                />
+              </>
+            )}
+
+            <Divider />
+
             <InfoRow
-              label="Guardian"
-              value={(rowData as FindOneTenant).guardian ?? '—'}
+              label="Verification Level"
+              value={displayData.verificationLevel ?? '—'}
             />
-          )}
-          {thisTableIsFor === 'OWNER' && (
-            <>
-              <InfoRow
-                label="Phone"
-                value={(rowData as FindOneOwner).phone_number ?? '—'}
-              />
-              <InfoRow
-                label="Address"
-                value={(rowData as FindOneOwner).address ?? '—'}
-              />
-              <InfoRow
-                label="Age"
-                value={(rowData as FindOneOwner).age?.toString() ?? '—'}
-              />
-              <InfoRow
-                label="Consent Accepted"
-                value={
-                  (rowData as FindOneOwner).policiesAcceptedAt
-                    ? parseIsoDate((rowData as FindOneOwner).policiesAcceptedAt)
-                        ?.dateOnly
-                    : 'No'
-                }
-              />
-              <InfoRow
-                label="Legitimacy Consent"
-                value={
-                  (rowData as FindOneOwner).hasAcceptedPolicies ? 'Yes' : 'No'
-                }
-              />
-            </>
-          )}
-          <InfoRow
-            label="Verification Level"
-            value={rowData.verificationLevel ?? '—'}
-          />
-          <InfoRow
-            label="Registration Status"
-            value={rowData.registrationStatus ?? '—'}
-          />
-          <InfoRow label="Is Active" value={rowData.isActive ? 'Yes' : 'No'} />
-          <InfoRow label="Created At" value={createdAt} />
-          <InfoRow label="Updated At" value={updatedAt} />
-        </Stack>
+
+            <InfoRow
+              label="Registration Status"
+              value={displayData.registrationStatus ?? '—'}
+            />
+
+            <InfoRow
+              label="Is Active"
+              value={displayData.isActive ? 'Yes' : 'No'}
+            />
+
+            <InfoRow label="Created At" value={createdAt} />
+            <InfoRow label="Updated At" value={updatedAt} />
+          </Stack>
+        )}
       </DialogContent>
 
       <DialogActions>
         <Button
           variant="outlined"
-          color="warning"
+          color={isInactive ? 'success' : 'warning'}
           startIcon={<SuspendIcon />}
-          onClick={() => onSuspend(rowData)}
+          onClick={() => onSuspend(displayData)}
+          disabled={thisTableIsFor === 'OWNER' && isOwnerDetailsFetching}
         >
-          Suspend
+          {isInactive ? 'Unsuspend' : 'Suspend'}
         </Button>
+
         <Button
           variant="outlined"
           color="error"
           startIcon={<DeleteIcon />}
-          onClick={() => onDelete(rowData)}
+          onClick={() => onDelete(displayData)}
         >
           Delete
         </Button>
+
         <Button onClick={handleClose}>Close</Button>
       </DialogActions>
     </Dialog>
@@ -164,7 +234,9 @@ function InfoRow({ label, value }: { label: string; value: string }) {
       >
         {label}
       </Typography>
-      <Typography variant="body2">{value}</Typography>
+      <Typography variant="body2" fontWeight={600}>
+        {value}
+      </Typography>
     </Box>
   );
 }

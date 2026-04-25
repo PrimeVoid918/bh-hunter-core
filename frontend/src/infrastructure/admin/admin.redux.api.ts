@@ -1,7 +1,11 @@
 import { BACKEND_API } from '@/app/config/api';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { ApiResponseType } from '../common/types/backend-reponse.type';
-import { Admin } from './admin.types';
+import {
+  Admin,
+  AdminSuspendUserPayload,
+  AdminSuspendUserResponse,
+} from './admin.types';
 import { ownerEndpoints, tenantEndpoints } from './configs';
 
 import {
@@ -14,7 +18,14 @@ import {
 
 const adminApiRoute = `/admins`;
 export const adminApi = createApi({
-  tagTypes: ['Admin', 'Tenant', 'Owner', 'AdminTransaction'],
+  // tagTypes: ['Admin', 'Tenant', 'Owner', 'AdminTransaction'],
+  tagTypes: [
+    'Admin',
+    'Tenant',
+    'Owner',
+    'AdminTransaction',
+    'AdminTransactionStats',
+  ],
   reducerPath: 'adminsApi',
   baseQuery: fetchBaseQuery({
     baseUrl: BACKEND_API,
@@ -110,10 +121,86 @@ export const adminApi = createApi({
       //* Optional: invalidates cache for "Admin"
       invalidatesTags: ['Admin'],
     }),
+    suspendTenant: builder.mutation<
+      AdminSuspendUserResponse,
+      {
+        adminId: number;
+        tenantId: number;
+        payload?: AdminSuspendUserPayload;
+      }
+    >({
+      query: ({ adminId, tenantId, payload }) => ({
+        url: `${adminApiRoute}/${adminId}/tenants/${tenantId}/suspend`,
+        method: 'PATCH',
+        body: payload ?? {},
+      }),
+      transformResponse: (
+        response: ApiResponseType<AdminSuspendUserResponse>,
+      ) => response.results,
+      invalidatesTags: ['Tenant'],
+    }),
+
+    unsuspendTenant: builder.mutation<
+      AdminSuspendUserResponse,
+      {
+        adminId: number;
+        tenantId: number;
+        payload?: AdminSuspendUserPayload;
+      }
+    >({
+      query: ({ adminId, tenantId, payload }) => ({
+        url: `${adminApiRoute}/${adminId}/tenants/${tenantId}/unsuspend`,
+        method: 'PATCH',
+        body: payload ?? {},
+      }),
+      transformResponse: (
+        response: ApiResponseType<AdminSuspendUserResponse>,
+      ) => response.results,
+      invalidatesTags: ['Tenant'],
+    }),
+
+    suspendOwner: builder.mutation<
+      AdminSuspendUserResponse,
+      {
+        adminId: number;
+        ownerId: number;
+        payload?: AdminSuspendUserPayload;
+      }
+    >({
+      query: ({ adminId, ownerId, payload }) => ({
+        url: `${adminApiRoute}/${adminId}/owners/${ownerId}/suspend`,
+        method: 'PATCH',
+        body: payload ?? {},
+      }),
+      transformResponse: (
+        response: ApiResponseType<AdminSuspendUserResponse>,
+      ) => response.results,
+      invalidatesTags: ['Owner'],
+    }),
+
+    unsuspendOwner: builder.mutation<
+      AdminSuspendUserResponse,
+      {
+        adminId: number;
+        ownerId: number;
+        payload?: AdminSuspendUserPayload;
+      }
+    >({
+      query: ({ adminId, ownerId, payload }) => ({
+        url: `${adminApiRoute}/${adminId}/owners/${ownerId}/unsuspend`,
+        method: 'PATCH',
+        body: payload ?? {},
+      }),
+      transformResponse: (
+        response: ApiResponseType<AdminSuspendUserResponse>,
+      ) => response.results,
+      invalidatesTags: ['Owner'],
+    }),
     ...tenantEndpoints(builder),
     ...ownerEndpoints(builder),
   }),
 });
+
 export const {
   useGetAllQuery,
   useGetOneQuery,
@@ -123,6 +210,12 @@ export const {
   useCreateMutation,
   usePatchMutation,
   useDeleteMutation,
+
+  useSuspendTenantMutation,
+  useUnsuspendTenantMutation,
+  useSuspendOwnerMutation,
+  useUnsuspendOwnerMutation,
+
   useGetAllTenantsQuery,
   useCreateTenantMutation,
   useDeleteTenantMutation,

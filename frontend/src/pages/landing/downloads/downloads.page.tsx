@@ -8,11 +8,27 @@ import {
   Paper,
   Grid,
   useTheme,
+  Alert,
 } from '@mui/material';
 import AndroidIcon from '@mui/icons-material/Android';
-import QrCode2Icon from '@mui/icons-material/QrCode2';
 import SecurityIcon from '@mui/icons-material/Security';
 import SmartphoneIcon from '@mui/icons-material/Smartphone';
+import DownloadIcon from '@mui/icons-material/Download';
+
+const APK_VERSION = 'v1.0.2';
+const APK_FILE_NAME = `bh-hunter-${APK_VERSION}.apk`;
+
+// Put the APK here in backend:
+// BH_Back/public/downloads/bh-hunter-v1.0.2.apk
+const APK_URL = `/downloads/${APK_FILE_NAME}`;
+
+// QR should point to the public download page, not directly to the APK.
+// This way the QR still works even if APK version changes later.
+const DOWNLOAD_PAGE_URL = 'https://bhhph.online/downloads';
+
+const QR_IMAGE_URL = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+  DOWNLOAD_PAGE_URL,
+)}`;
 
 export default function DownloadsMainPage() {
   const theme = useTheme();
@@ -27,7 +43,6 @@ export default function DownloadsMainPage() {
     >
       <Container maxWidth="lg">
         <Grid container spacing={6} alignItems="center">
-          {/* LEFT: Value Proposition */}
           <Grid size={{ xs: 12, md: 6 }}>
             <Stack spacing={3}>
               <Box>
@@ -41,6 +56,7 @@ export default function DownloadsMainPage() {
                 >
                   GET THE APP
                 </Typography>
+
                 <Typography
                   variant="h2"
                   sx={{
@@ -55,6 +71,7 @@ export default function DownloadsMainPage() {
                     In Your Pocket.
                   </span>
                 </Typography>
+
                 <Typography
                   variant="body1"
                   sx={{ color: 'text.secondary', fontSize: '1.1rem' }}
@@ -65,25 +82,48 @@ export default function DownloadsMainPage() {
                 </Typography>
               </Box>
 
+              <Alert
+                severity="info"
+                variant="outlined"
+                sx={{ borderRadius: 3 }}
+              >
+                Android may ask you to allow installation from your browser
+                before installing the APK.
+              </Alert>
+
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <Button
+                  component="a"
+                  href={APK_URL}
+                  download={APK_FILE_NAME}
                   variant="contained"
                   size="large"
                   startIcon={<AndroidIcon />}
                   sx={{ px: 4, py: 2 }}
                 >
-                  Download APK (v1.0.2)
+                  Download APK ({APK_VERSION})
                 </Button>
-                <Button variant="outlined" size="large" sx={{ px: 4, py: 2 }}>
-                  View Release Notes
+
+                <Button
+                  component="a"
+                  href={APK_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="outlined"
+                  size="large"
+                  startIcon={<DownloadIcon />}
+                  sx={{ px: 4, py: 2 }}
+                >
+                  Open Download
                 </Button>
               </Stack>
 
               <Stack direction="row" spacing={3} sx={{ pt: 2 }}>
                 <FeatureItem
                   icon={<SecurityIcon sx={{ fontSize: 20 }} />}
-                  text="Verified Safe"
+                  text="Official BH Hunter APK"
                 />
+
                 <FeatureItem
                   icon={<SmartphoneIcon sx={{ fontSize: 20 }} />}
                   text="Android 8.0+"
@@ -92,7 +132,6 @@ export default function DownloadsMainPage() {
             </Stack>
           </Grid>
 
-          {/* RIGHT: Visual "Contained" Cards */}
           <Grid size={{ xs: 12, md: 6 }}>
             <Paper
               sx={{
@@ -106,33 +145,35 @@ export default function DownloadsMainPage() {
                 overflow: 'hidden',
               }}
             >
-              <Typography variant="h6" sx={{ fontWeight: 700, mb: 3 }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, mb: 1 }}>
                 Scan to Download
               </Typography>
 
-              {/* QR Code Placeholder */}
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Scan this QR code using your Android phone.
+              </Typography>
+
               <Box
+                component="img"
+                src={QR_IMAGE_URL}
+                alt="BH Hunter download QR code"
                 sx={{
-                  width: 200,
-                  height: 200,
+                  width: 220,
+                  height: 220,
                   mx: 'auto',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: '2px dashed',
-                  borderColor: 'primary.light',
+                  display: 'block',
                   borderRadius: '16px',
-                  bgcolor: 'primary.light',
-                  color: 'primary.main',
+                  p: 1.5,
+                  bgcolor: 'common.white',
+                  border: '1px solid',
+                  borderColor: 'divider',
                   mb: 3,
                 }}
-              >
-                <QrCode2Icon sx={{ fontSize: 120, opacity: 0.8 }} />
-              </Box>
+              />
 
               <Typography variant="caption" color="text.secondary">
                 Direct download for Android devices. <br />
-                Enable "Install from Unknown Sources" in settings.
+                If prompted, enable installation from your browser.
               </Typography>
             </Paper>
           </Grid>
@@ -142,7 +183,6 @@ export default function DownloadsMainPage() {
   );
 }
 
-// Small helper for the feature badges
 function FeatureItem({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
     <Stack

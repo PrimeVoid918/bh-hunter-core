@@ -1011,6 +1011,11 @@ export class PaymentsService {
             },
           });
 
+          await this.cancelOtherOpenUnpaidBookingsForTenant(tx, {
+            tenantId: booking.tenantId,
+            completedBookingId: booking.id,
+          });
+
           return {
             bookingId: booking.id,
             tenantId: booking.tenantId,
@@ -1211,5 +1216,89 @@ export class PaymentsService {
       chargeType: nextCharge.type,
       amount: nextCharge.amount,
     };
+  }
+
+  private async cancelOtherOpenUnpaidBookingsForTenant(
+    tx: Prisma.TransactionClient,
+    params: {
+      tenantId: number;
+      completedBookingId: number;
+    },
+  ) {
+    const { tenantId, completedBookingId } = params;
+
+    const otherOpenBookings = await tx.booking.findMany({
+      where: {
+        tenantId,
+        id: {
+          not: completedBookingId,
+        },
+        isDeleted: false,
+        status: {
+          in: [
+            BookingStatus.PENDING_REQUEST,
+            BookingStatus.AWAITING_PAYMENT,
+            BookingStatus.PAYMENT_APPROVAL,
+            BookingStatus.PAYMENT_FAILED,
+          ],
+        },
+
+        // Safety rule:
+        // Do not auto-cancel bookings that already have paid charges.
+        // Those may need refund handling instead.
+        charges: {
+          none: {
+            status: BookingChargeStatus.PAID,
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const bookingIds = otherOpenBookings.map((booking) => booking.id);
+
+    if (!bookingIds.length) return;
+
+    await tx.booking.updateMany({
+      where: {
+        id: {
+          in: bookingIds,
+        },
+      },
+      data: {
+        status: BookingStatus.CANCELLED_BOOKING,
+        tenantMessage:
+          'Automatically cancelled because the tenant already has a completed booking.',
+        updatedAt: new Date(),
+      },
+    });
+
+    await tx.bookingCharge.updateMany({
+      where: {
+        bookingId: {
+          in: bookingIds,
+        },
+        status: BookingChargeStatus.PENDING,
+      },
+      data: {
+        status: BookingChargeStatus.CANCELLED,
+      },
+    });
+
+    await tx.payment.updateMany({
+      where: {
+        bookingId: {
+          in: bookingIds,
+        },
+        status: {
+          in: [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION],
+        },
+      },
+      data: {
+        status: PaymentStatus.CANCELLED,
+      },
+    });
   }
 }

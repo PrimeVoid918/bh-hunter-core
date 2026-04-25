@@ -10,7 +10,12 @@ import { CreateAdminDto } from './dto/create-admin.dto';
 import { UpdateAdminDto } from './dto/update-admin.dto';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { FindAdminsDto } from './dto/find-admins.dto';
-import { Admin, ResourceType, VerificationStatus } from '@prisma/client';
+import {
+  Admin,
+  ResourceType,
+  UserRole,
+  VerificationStatus,
+} from '@prisma/client';
 import { TenantsService } from '../tenants/tenants.service';
 import { CreateTenantDto } from '../tenants/dto/create-tenant.dto';
 import { OwnersService } from '../owners/owners.service';
@@ -184,15 +189,36 @@ export class AdminsService {
       );
     }
 
+    // const result = await prisma.verificationDocument.update({
+    //   where: { id },
+    //   data: {
+    //     verificationStatus: payload.verificationStatus,
+    //     rejectionReason: payload.rejectReason,
+    //     approvedAt: new Date(),
+    //     verifiedById: payload.adminId,
+    //   },
+    // });
+
     const result = await prisma.verificationDocument.update({
       where: { id },
       data: {
         verificationStatus: payload.verificationStatus,
-        rejectionReason: payload.rejectReason,
-        approvedAt: new Date(),
+        rejectionReason:
+          payload.verificationStatus === VerificationStatus.REJECTED
+            ? payload.rejectReason
+            : null,
+        approvedAt:
+          payload.verificationStatus === VerificationStatus.APPROVED
+            ? new Date()
+            : null,
         verifiedById: payload.adminId,
       },
     });
+
+    const verificationState = await this.refreshUserVerificationState(
+      existingPermit.userId,
+      existingPermit.userType,
+    );
 
     //
     if (payload.verificationStatus == 'APPROVED') {
@@ -227,6 +253,7 @@ export class AdminsService {
 
     return {
       permitStatus: result.verificationStatus,
+      verificationState,
     };
   }
 
@@ -263,8 +290,319 @@ export class AdminsService {
       },
     });
 
+    const verificationState = await this.refreshUserVerificationState(
+      existingPermit.userId,
+      existingPermit.userType,
+    );
+
     return {
       permitStatus: result.verificationStatus,
+      verificationState,
+    };
+  }
+
+  private async ensureAdminExists(adminId: number) {
+    if (!adminId || Number.isNaN(adminId)) {
+      throw new BadRequestException('Invalid admin ID');
+    }
+
+    const admin = await this.prisma.admin.findFirst({
+      where: {
+        id: adminId,
+        isDeleted: false,
+        isActive: true,
+      },
+    });
+
+    if (!admin) {
+      throw new NotFoundException('Admin not found or inactive');
+    }
+
+    return admin;
+  }
+
+  async suspendTenant(
+    adminId: number,
+    tenantId: number,
+    payload?: {
+      reason?: string;
+    },
+  ) {
+    if (!tenantId || Number.isNaN(tenantId)) {
+      throw new BadRequestException('Invalid tenant ID');
+    }
+
+    await this.ensureAdminExists(adminId);
+
+    const tenant = await this.prisma.tenant.findFirst({
+      where: {
+        id: tenantId,
+        isDeleted: false,
+      },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    if (tenant.isSuspended) {
+      return {
+        action: 'TENANT_ALREADY_SUSPENDED',
+        userType: 'TENANT',
+        userId: tenant.id,
+        isActive: tenant.isActive,
+        isSuspended: tenant.isSuspended,
+        suspendedAt: tenant.suspendedAt,
+        reason: payload?.reason ?? null,
+      };
+    }
+
+    const updated = await this.prisma.tenant.update({
+      where: {
+        id: tenantId,
+      },
+      data: {
+        isActive: false,
+        isSuspended: true,
+        suspendedAt: new Date(),
+      },
+      select: {
+        id: true,
+        username: true,
+        firstname: true,
+        lastname: true,
+        email: true,
+        role: true,
+        isActive: true,
+        isSuspended: true,
+        suspendedAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      action: 'TENANT_SUSPENDED',
+      userType: 'TENANT',
+      userId: updated.id,
+      reason: payload?.reason ?? null,
+      user: updated,
+    };
+  }
+
+  async unsuspendTenant(
+    adminId: number,
+    tenantId: number,
+    payload?: {
+      reason?: string;
+    },
+  ) {
+    if (!tenantId || Number.isNaN(tenantId)) {
+      throw new BadRequestException('Invalid tenant ID');
+    }
+
+    await this.ensureAdminExists(adminId);
+
+    const tenant = await this.prisma.tenant.findFirst({
+      where: {
+        id: tenantId,
+        isDeleted: false,
+      },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    if (!tenant.isSuspended && tenant.isActive) {
+      return {
+        action: 'TENANT_ALREADY_ACTIVE',
+        userType: 'TENANT',
+        userId: tenant.id,
+        isActive: tenant.isActive,
+        isSuspended: tenant.isSuspended,
+        suspendedAt: tenant.suspendedAt,
+        reason: payload?.reason ?? null,
+      };
+    }
+
+    const updated = await this.prisma.tenant.update({
+      where: {
+        id: tenantId,
+      },
+      data: {
+        isActive: true,
+        isSuspended: false,
+      },
+      select: {
+        id: true,
+        username: true,
+        firstname: true,
+        lastname: true,
+        email: true,
+        role: true,
+        isActive: true,
+        isSuspended: true,
+        suspendedAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      action: 'TENANT_UNSUSPENDED',
+      userType: 'TENANT',
+      userId: updated.id,
+      reason: payload?.reason ?? null,
+      user: updated,
+    };
+  }
+
+  async suspendOwner(
+    adminId: number,
+    ownerId: number,
+    payload?: {
+      reason?: string;
+    },
+  ) {
+    if (!ownerId || Number.isNaN(ownerId)) {
+      throw new BadRequestException('Invalid owner ID');
+    }
+
+    await this.ensureAdminExists(adminId);
+
+    const owner = await this.prisma.owner.findFirst({
+      where: {
+        id: ownerId,
+        isDeleted: false,
+      },
+    });
+
+    if (!owner) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    if (owner.isSuspended) {
+      return {
+        action: 'OWNER_ALREADY_SUSPENDED',
+        userType: 'OWNER',
+        userId: owner.id,
+        isActive: owner.isActive,
+        isSuspended: owner.isSuspended,
+        suspendedAt: owner.suspendedAt,
+        reason: payload?.reason ?? null,
+      };
+    }
+
+    const updated = await this.prisma.owner.update({
+      where: {
+        id: ownerId,
+      },
+      data: {
+        isActive: false,
+        isSuspended: true,
+        suspendedAt: new Date(),
+      },
+      select: {
+        id: true,
+        username: true,
+        firstname: true,
+        lastname: true,
+        email: true,
+        role: true,
+        isActive: true,
+        isSuspended: true,
+        suspendedAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      action: 'OWNER_SUSPENDED',
+      userType: 'OWNER',
+      userId: updated.id,
+      reason: payload?.reason ?? null,
+      user: updated,
+    };
+  }
+
+  private async refreshUserVerificationState(
+    userId: number,
+    userRole: UserRole,
+  ) {
+    if (userRole === UserRole.OWNER) {
+      return this.ownersService.getVerificationStatus(userId);
+    }
+
+    if (userRole === UserRole.TENANT) {
+      return this.tenantsService.getVerificationStatus(userId);
+    }
+
+    return null;
+  }
+
+  async unsuspendOwner(
+    adminId: number,
+    ownerId: number,
+    payload?: {
+      reason?: string;
+    },
+  ) {
+    if (!ownerId || Number.isNaN(ownerId)) {
+      throw new BadRequestException('Invalid owner ID');
+    }
+
+    await this.ensureAdminExists(adminId);
+
+    const owner = await this.prisma.owner.findFirst({
+      where: {
+        id: ownerId,
+        isDeleted: false,
+      },
+    });
+
+    if (!owner) {
+      throw new NotFoundException('Owner not found');
+    }
+
+    if (!owner.isSuspended && owner.isActive) {
+      return {
+        action: 'OWNER_ALREADY_ACTIVE',
+        userType: 'OWNER',
+        userId: owner.id,
+        isActive: owner.isActive,
+        isSuspended: owner.isSuspended,
+        suspendedAt: owner.suspendedAt,
+        reason: payload?.reason ?? null,
+      };
+    }
+
+    const updated = await this.prisma.owner.update({
+      where: {
+        id: ownerId,
+      },
+      data: {
+        isActive: true,
+        isSuspended: false,
+      },
+      select: {
+        id: true,
+        username: true,
+        firstname: true,
+        lastname: true,
+        email: true,
+        role: true,
+        isActive: true,
+        isSuspended: true,
+        suspendedAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      action: 'OWNER_UNSUSPENDED',
+      userType: 'OWNER',
+      userId: updated.id,
+      reason: payload?.reason ?? null,
+      user: updated,
     };
   }
 }

@@ -1,7 +1,13 @@
 import { BACKEND_API } from '@/app/config/api';
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import { ApiResponseType } from '../common/types/backend-reponse.type';
-import { CreateOwner, FindAllOwners, FindOneOwner } from './owner.types';
+import {
+  CreateOwner,
+  FindAllOwners,
+  FindAllOwnersSchema,
+  FindOneOwner,
+  FindOneOwnerSchema,
+} from './owner.types';
 import { VerificationDocumentStatus } from '../documents/documents.type';
 
 //* -- RTK ---
@@ -21,17 +27,38 @@ export const ownerApi = createApi({
 
   endpoints: (builder) => ({
     getAll: builder.query<FindAllOwners[], void>({
-      // TODO: add pagination
       query: () => ownerApiRoute,
-      transformResponse: (response: ApiResponseType<FindAllOwners[]>) =>
-        response.results ?? [],
+      transformResponse: (response: ApiResponseType<unknown>) => {
+        const parsed = FindAllOwnersSchema.safeParse(response.results ?? []);
+
+        if (!parsed.success) {
+          console.log('Owner list shape error:', parsed.error.flatten());
+          return (response.results ?? []) as FindAllOwners[];
+        }
+
+        return parsed.data;
+      },
+      providesTags: [{ type: 'Owner', id: 'LIST' }],
     }),
-    getOne: builder.query<FindOneOwner, number>({
+
+    getOne: builder.query<FindOneOwner | null, number>({
       query: (id) => `${ownerApiRoute}/${id}`,
-      transformResponse: (response: ApiResponseType<FindOneOwner>) =>
-        response.results ?? null,
-      //* Optional: invalidates cache for `Owner`
-      providesTags: (result, error, id) => [{ type: 'Owner', id }],
+      transformResponse: (response: ApiResponseType<unknown>) => {
+        if (!response.results) return null;
+
+        const parsed = FindOneOwnerSchema.safeParse(response.results);
+
+        if (!parsed.success) {
+          console.log('Owner detail shape error:', parsed.error.flatten());
+          return response.results as FindOneOwner;
+        }
+
+        return parsed.data;
+      },
+      providesTags: (_result, _error, id) => [
+        { type: 'Owner', id },
+        { type: 'Owner', id: 'LIST' },
+      ],
     }),
     create: builder.mutation<CreateOwner, Partial<CreateOwner>>({
       query: (data) => {
@@ -71,16 +98,21 @@ export const ownerApi = createApi({
         method: 'PATCH',
         body: data,
       }),
-      //* Optional: invalidates cache for `Owner`
-      invalidatesTags: ['Owner'],
+      invalidatesTags: (_result, _error, arg) => [
+        { type: 'Owner', id: arg.id },
+        { type: 'Owner', id: 'LIST' },
+      ],
     }),
+
     delete: builder.mutation<{ success: boolean }, number>({
       query: (id) => ({
         url: `${ownerApiRoute}/${id}`,
         method: 'DELETE',
       }),
-      //* Optional: invalidates cache for `Owner`
-      invalidatesTags: ['Owner'],
+      invalidatesTags: (_result, _error, id) => [
+        { type: 'Owner', id },
+        { type: 'Owner', id: 'LIST' },
+      ],
     }),
   }),
 });

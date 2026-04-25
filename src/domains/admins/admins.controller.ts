@@ -79,6 +79,24 @@ export class AdminsController {
     return this.adminsService.removeTenant(+adminId, +tenantId);
   }
 
+  @Patch(':adminId/tenants/:tenantId/suspend')
+  suspendTenant(
+    @Param('adminId') adminId: string,
+    @Param('tenantId') tenantId: string,
+    @Body() payload: { reason?: string },
+  ) {
+    return this.adminsService.suspendTenant(+adminId, +tenantId, payload);
+  }
+
+  @Patch(':adminId/tenants/:tenantId/unsuspend')
+  unsuspendTenant(
+    @Param('adminId') adminId: string,
+    @Param('tenantId') tenantId: string,
+    @Body() payload: { reason?: string },
+  ) {
+    return this.adminsService.unsuspendTenant(+adminId, +tenantId, payload);
+  }
+
   // =========================
   // OWNERS
   // =========================
@@ -99,6 +117,24 @@ export class AdminsController {
     @Param('ownerId') ownerId: string,
   ) {
     return this.adminsService.removeOwner(+adminId, +ownerId);
+  }
+
+  @Patch(':adminId/owners/:ownerId/suspend')
+  suspendOwner(
+    @Param('adminId') adminId: string,
+    @Param('ownerId') ownerId: string,
+    @Body() payload: { reason?: string },
+  ) {
+    return this.adminsService.suspendOwner(+adminId, +ownerId, payload);
+  }
+
+  @Patch(':adminId/owners/:ownerId/unsuspend')
+  unsuspendOwner(
+    @Param('adminId') adminId: string,
+    @Param('ownerId') ownerId: string,
+    @Body() payload: { reason?: string },
+  ) {
+    return this.adminsService.unsuspendOwner(+adminId, +ownerId, payload);
   }
 
   // =========================

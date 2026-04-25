@@ -364,8 +364,10 @@ export class MetricsService {
       );
     });
 
-    const pendingPayments = normalized.filter((p) =>
-      [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION].includes(p.status),
+    const pendingPayments = normalized.filter(
+      (p) =>
+        p.status === PaymentStatus.PENDING ||
+        p.status === PaymentStatus.REQUIRES_ACTION,
     );
 
     const failedPayments = normalized.filter(

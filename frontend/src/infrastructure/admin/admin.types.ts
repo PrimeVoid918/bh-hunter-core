@@ -50,8 +50,11 @@ export const transactionStatusSchema = z.enum([
 
 export const purchaseTypeSchema = z.enum([
   'ROOM_BOOKING',
-  'SUBSCRIPTION',
+  'RESERVATION_FEE',
+  'ADVANCE_PAYMENT',
   'DEPOSIT',
+  'EXTENSION_PAYMENT',
+  'SUBSCRIPTION',
 ]);
 
 export const currencyTypeSchema = z.enum(['PHP', 'USD', 'EUR', 'JPY']);
@@ -127,3 +130,41 @@ export type AdminTransactionMetaData = z.infer<
   typeof adminTransactionMetaDataSchema
 >;
 export type AdminTransactionStats = z.infer<typeof adminTransactionStatsSchema>;
+
+export type AdminSuspendUserRole = 'TENANT' | 'OWNER';
+
+export interface AdminSuspendUserPayload {
+  reason?: string;
+}
+
+export interface AdminSuspendedUser {
+  id: number;
+  username: string;
+  firstname?: string | null;
+  lastname?: string | null;
+  email: string;
+  role: AdminSuspendUserRole;
+  isActive: boolean;
+  isSuspended: boolean;
+  suspendedAt?: string | null;
+  updatedAt?: string;
+}
+
+export interface AdminSuspendUserResponse {
+  action:
+    | 'TENANT_SUSPENDED'
+    | 'TENANT_UNSUSPENDED'
+    | 'TENANT_ALREADY_SUSPENDED'
+    | 'TENANT_ALREADY_ACTIVE'
+    | 'OWNER_SUSPENDED'
+    | 'OWNER_UNSUSPENDED'
+    | 'OWNER_ALREADY_SUSPENDED'
+    | 'OWNER_ALREADY_ACTIVE';
+  userType: AdminSuspendUserRole;
+  userId: number;
+  reason?: string | null;
+  isActive?: boolean;
+  isSuspended?: boolean;
+  suspendedAt?: string | null;
+  user?: AdminSuspendedUser;
+}
