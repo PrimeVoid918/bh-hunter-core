@@ -47,7 +47,8 @@ export interface BookingStatusChargeForStatement {
   paymentStatus: PaymentStatusForStatement | string;
 
   description?: string | null;
-  metadata?: Record<string, any> | null;
+  // metadata?: Record<string, any> | null;
+  metadata?: unknown;
 }
 
 export interface BookingStatusResultForStatement {
@@ -90,7 +91,8 @@ export interface BillingStatementItem {
   dueDate: Date | string | null;
   paidAt: Date | string | null;
 
-  metadata?: Record<string, any> | null;
+  // metadata?: Record<string, any> | null;
+  metadata?: unknown;
 
   baseAmount?: number | null;
   baseAmountText?: string | null;

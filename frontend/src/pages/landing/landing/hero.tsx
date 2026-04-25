@@ -84,7 +84,7 @@ export default function Hero() {
             <Button
               variant="outlined"
               size="large"
-              href="/api-docs" // Link to Swagger UI
+              href="/docs" // Link to Swagger UI
               target="_blank"
               sx={{
                 py: 1.5,

@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { IDatabaseService } from 'src/infrastructure/database/database.interface';
 import { subDays, subMonths } from 'src/infrastructure/shared/utils/subDays';
 import { PrismaService } from 'src/infrastructure/database/prisma.service';
-import { BookingStatus } from '@prisma/client';
+import { BookingStatus, PaymentStatus, PurchaseType } from '@prisma/client';
 
 @Injectable()
 export class MetricsService {
@@ -302,23 +302,44 @@ export class MetricsService {
   }
 
   // Financial Report
+  // Financial Report
   async getFinancialReports(
     timeframe?: 'week' | 'month',
     from?: Date,
     to?: Date,
   ) {
-    // resolve date range
     const { startDate, endDate } = this.resolveDateRange(timeframe, from, to);
 
-    // fetch payments
+    const bookingPurchaseTypes: PurchaseType[] = [
+      PurchaseType.ROOM_BOOKING,
+      PurchaseType.RESERVATION_FEE,
+      PurchaseType.ADVANCE_PAYMENT,
+      PurchaseType.DEPOSIT,
+      PurchaseType.EXTENSION_PAYMENT,
+    ];
+
     const payments = await this.prisma.payment.findMany({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+        status: {
+          not: PaymentStatus.CANCELLED,
+        },
+      },
       select: {
         amount: true,
         status: true,
         purchaseType: true,
         createdAt: true,
         ownerId: true,
+        bookingId: true,
+        booking: {
+          select: {
+            status: true,
+          },
+        },
       },
     });
 
@@ -328,57 +349,64 @@ export class MetricsService {
       type: p.purchaseType,
       date: p.createdAt,
       ownerId: p.ownerId,
+      bookingId: p.bookingId,
+      bookingStatus: p.booking?.status ?? null,
     }));
 
-    // global aggregates
-    const totalRevenue = normalized
-      .filter((p) => p.status === 'PAID')
+    const paidRevenuePayments = normalized.filter((p) => {
+      if (p.status !== PaymentStatus.PAID) return false;
+
+      if (p.type === PurchaseType.SUBSCRIPTION) return true;
+
+      return (
+        bookingPurchaseTypes.includes(p.type) &&
+        p.bookingStatus === BookingStatus.COMPLETED_BOOKING
+      );
+    });
+
+    const pendingPayments = normalized.filter((p) =>
+      [PaymentStatus.PENDING, PaymentStatus.REQUIRES_ACTION].includes(p.status),
+    );
+
+    const failedPayments = normalized.filter(
+      (p) => p.status === PaymentStatus.FAILED,
+    );
+
+    const refundedPayments = normalized.filter(
+      (p) => p.status === PaymentStatus.REFUNDED,
+    );
+
+    const bookingRevenue = paidRevenuePayments
+      .filter((p) => bookingPurchaseTypes.includes(p.type))
       .reduce((s, p) => s + p.amount, 0);
 
-    const totalPaid = normalized
-      .filter((p) => p.status === 'PAID')
-      .reduce((s, p) => s + p.amount, 0);
-    const totalPending = normalized
-      .filter((p) => p.status !== 'PAID')
+    const subscriptionRevenue = paidRevenuePayments
+      .filter((p) => p.type === PurchaseType.SUBSCRIPTION)
       .reduce((s, p) => s + p.amount, 0);
 
-    const bookingRevenue = normalized
-      .filter((p) => p.type === 'ROOM_BOOKING' && p.status === 'PAID')
-      .reduce((s, p) => s + p.amount, 0);
+    const totalRevenue = bookingRevenue + subscriptionRevenue;
+    const totalPaid = totalRevenue;
 
-    const subscriptionRevenue = normalized
-      .filter((p) => p.type === 'SUBSCRIPTION' && p.status === 'PAID')
-      .reduce((s, p) => s + p.amount, 0);
+    const totalPending = pendingPayments.reduce((s, p) => s + p.amount, 0);
 
     const statusBreakdown = {
       paid: totalPaid,
       pending: totalPending,
-      failed: normalized
-        .filter((p) => p.status === 'FAILED')
-        .reduce((s, p) => s + p.amount, 0),
+      failed: failedPayments.reduce((s, p) => s + p.amount, 0),
+      refunded: refundedPayments.reduce((s, p) => s + p.amount, 0),
     };
 
-    // time series (for charts)
-    const groupByDate: Record<string, any> = {};
-
-    for (const p of normalized) {
-      const date = p.date.toISOString().split('T')[0];
-      if (!groupByDate[date]) {
-        groupByDate[date] = { date, revenue: 0, bookings: 0, subscriptions: 0 };
+    const groupByDate: Record<
+      string,
+      {
+        date: string;
+        revenue: number;
+        bookings: number;
+        subscriptions: number;
       }
-      groupByDate[date].revenue += p.amount;
-      if (p.type === 'ROOM_BOOKING') groupByDate[date].bookings += 1;
-      if (p.type === 'SUBSCRIPTION') groupByDate[date].subscriptions += 1;
-    }
+    > = {};
 
-    const timeseries = Object.values(groupByDate).sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
-
-    // per-owner breakdown
-    const ownerMap = new Map<number, any>();
-
-    for (const p of normalized) {
+    for (const p of paidRevenuePayments) {
       const date = p.date.toISOString().split('T')[0];
 
       if (!groupByDate[date]) {
@@ -390,59 +418,118 @@ export class MetricsService {
         };
       }
 
-      if (p.status === 'PAID') {
-        groupByDate[date].revenue += p.amount;
+      groupByDate[date].revenue += p.amount;
 
-        if (p.type === 'ROOM_BOOKING') groupByDate[date].bookings += 1;
-        if (p.type === 'SUBSCRIPTION') groupByDate[date].subscriptions += 1;
+      if (bookingPurchaseTypes.includes(p.type)) {
+        groupByDate[date].bookings += 1;
+      }
+
+      if (p.type === PurchaseType.SUBSCRIPTION) {
+        groupByDate[date].subscriptions += 1;
       }
     }
 
-    // ensure all owners appear even with 0 payments
+    const timeseries = Object.values(groupByDate).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
+    const ownerMap = new Map<
+      number,
+      {
+        totalPayments: number;
+        paidPayments: number;
+        revenue: number;
+      }
+    >();
+
+    for (const p of normalized) {
+      if (!p.ownerId) continue;
+
+      const current = ownerMap.get(p.ownerId) ?? {
+        totalPayments: 0,
+        paidPayments: 0,
+        revenue: 0,
+      };
+
+      current.totalPayments += 1;
+
+      const isRevenuePayment =
+        p.status === PaymentStatus.PAID &&
+        ((bookingPurchaseTypes.includes(p.type) &&
+          p.bookingStatus === BookingStatus.COMPLETED_BOOKING) ||
+          p.type === PurchaseType.SUBSCRIPTION);
+
+      if (isRevenuePayment) {
+        current.paidPayments += 1;
+        current.revenue += p.amount;
+      }
+
+      ownerMap.set(p.ownerId, current);
+    }
+
     const owners = await this.prisma.owner.findMany({
-      select: { id: true, firstname: true, lastname: true },
+      where: {
+        isDeleted: false,
+      },
+      select: {
+        id: true,
+        firstname: true,
+        lastname: true,
+      },
+      orderBy: {
+        id: 'asc',
+      },
     });
 
     const items = owners.map((o) => {
-      const data = ownerMap.get(o.id) || {};
+      const data = ownerMap.get(o.id) ?? {
+        totalPayments: 0,
+        paidPayments: 0,
+        revenue: 0,
+      };
+
       return {
         ownerId: o.id,
         ownerName: `${o.firstname ?? ''} ${o.lastname ?? ''}`.trim(),
-        totalPayments: data.totalPayments ?? 0,
-        paidPayments: data.paidPayments ?? 0,
-        revenue: data.revenue ?? 0,
+        totalPayments: data.totalPayments,
+        paidPayments: data.paidPayments,
+        revenue: data.revenue,
       };
     });
 
-    // global bookings & subscriptions count
     const totalBookings = await this.prisma.booking.count({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
     });
 
     const totalSubscriptions = await this.prisma.subscription.count({
-      where: { createdAt: { gte: startDate, lte: endDate } },
+      where: {
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
     });
 
-    // final response
     return {
       timeframe: timeframe ?? 'custom',
 
-      // main KPIs (Key Performance Indicators)
       totalRevenue,
       totalPaid,
       totalPending,
       totalBookings,
       totalSubscriptions,
 
-      // breakdowns
       bookingRevenue,
       subscriptionRevenue,
       statusBreakdown,
 
-      // charts
       timeseries,
 
-      // tables
       items,
     };
   }
@@ -495,6 +582,47 @@ export class MetricsService {
       },
     });
 
+    const ownerIds = owners.map((owner) => owner.id);
+
+    const bookingPurchaseTypes: PurchaseType[] = [
+      PurchaseType.ROOM_BOOKING,
+      PurchaseType.RESERVATION_FEE,
+      PurchaseType.ADVANCE_PAYMENT,
+      PurchaseType.DEPOSIT,
+      PurchaseType.EXTENSION_PAYMENT,
+    ];
+
+    const ownerRevenueGroups = await this.prisma.payment.groupBy({
+      by: ['ownerId'],
+      where: {
+        ownerId: {
+          in: ownerIds,
+        },
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+        status: PaymentStatus.PAID,
+        purchaseType: {
+          in: bookingPurchaseTypes,
+        },
+        booking: {
+          is: {
+            status: BookingStatus.COMPLETED_BOOKING,
+          },
+        },
+      },
+      _sum: {
+        amount: true,
+      },
+    });
+
+    const revenueByOwnerId = new Map<number, number>();
+
+    for (const group of ownerRevenueGroups) {
+      revenueByOwnerId.set(group.ownerId, Number(group._sum.amount ?? 0));
+    }
+
     // map owners to report items
     let items = owners.map((owner) => {
       const totalBoardingHouses = owner.boardingHouses.length;
@@ -513,12 +641,7 @@ export class MetricsService {
         (s) => s.status === 'CANCELLED',
       ).length;
 
-      const totalRevenue = owner.boardingHouses.reduce(
-        (sum, bh) =>
-          sum +
-          bh.Booking.reduce((bSum, b) => bSum + Number(b.totalAmount ?? 0), 0),
-        0,
-      );
+      const totalRevenue = revenueByOwnerId.get(owner.id) ?? 0;
 
       const verified = owner.verificationDocuments.length;
 
