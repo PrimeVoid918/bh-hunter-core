@@ -1,5 +1,6 @@
 import DashboardNavigator from '../dashboard/navigation/dashboard.navigator';
 import LogsNavigator from '../logs/navigation/logs.navigator';
+import RefundRequestsNavigator from '../refund-requests/navigation/refund-requests.navigator';
 import TransactionsNavigator from '../transactions/navigation/transactions.navigator';
 import UsersNavigator from '../users/navigation/users.navigator';
 import ValidationNavigator from '../validation/navigation/validation.navigator';
@@ -16,6 +17,7 @@ export default function AdminNavigator() {
       { ...UsersNavigator() },
       { ...LogsNavigator() },
       { ...TransactionsNavigator() },
+      { ...RefundRequestsNavigator() },
     ],
   };
 }

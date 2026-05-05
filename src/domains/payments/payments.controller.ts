@@ -79,6 +79,22 @@ export class PaymentsController {
     return computedHash === expectedHash;
   }
 
+  @Post(':id/refund-request')
+  createRefundRequest(
+    @Param('id', ParseIntPipe) paymentId: number,
+    @Body()
+    body: {
+      tenantId: number;
+      reason?: string;
+    },
+  ) {
+    return this.paymentsService.createRefundRequest({
+      paymentId,
+      tenantId: body.tenantId,
+      reason: body.reason,
+    });
+  }
+
   @Post(':id/debug/pay-next-charge')
   debugPayNextCharge(@Param('id', ParseIntPipe) id: number) {
     return this.paymentsService.debugPayNextCharge(id);

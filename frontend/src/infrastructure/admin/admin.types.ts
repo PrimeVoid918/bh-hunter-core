@@ -168,3 +168,44 @@ export interface AdminSuspendUserResponse {
   suspendedAt?: string | null;
   user?: AdminSuspendedUser;
 }
+
+export type RefundRequestStatus =
+  | 'PENDING'
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'COMPLETED';
+
+export type RefundRequest = {
+  id: number;
+  paymentId: number;
+  status: RefundRequestStatus;
+  reason?: string;
+
+  requestedById: number;
+  requestedByType: 'TENANT' | 'OWNER';
+
+  adminId?: number | null;
+  adminNotes?: string | null;
+
+  createdAt: string;
+  updatedAt: string;
+
+  payment?: {
+    id: number;
+    amount: number;
+    currency: string;
+    status: string;
+    purchaseType: string;
+    userId: number;
+  };
+};
+
+export type RefundRequestResponse = {
+  data: RefundRequest[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+};

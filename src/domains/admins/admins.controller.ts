@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Query,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { VerificationStatus } from '@prisma/client';
 
@@ -52,6 +53,39 @@ export class AdminsController {
   @Get('transactions/:id')
   findOneTransaction(@Param('id') id: string) {
     return this.adminTransactionsService.findOne(+id);
+  }
+
+  @Get('refund-requests')
+  findRefundRequests(@Query() query: any) {
+    return this.adminTransactionsService.findRefundRequests(query);
+  }
+
+  @Patch('refund-requests/:id/approve')
+  approveRefund(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      adminId: number;
+      notes?: string;
+    },
+  ) {
+    return this.adminsService.approveRefundRequest(
+      id,
+      body.adminId,
+      body.notes,
+    );
+  }
+
+  @Patch('refund-requests/:id/reject')
+  rejectRefund(
+    @Param('id', ParseIntPipe) id: number,
+    @Body()
+    body: {
+      adminId: number;
+      notes?: string;
+    },
+  ) {
+    return this.adminsService.rejectRefundRequest(id, body.adminId, body.notes);
   }
 
   // =========================

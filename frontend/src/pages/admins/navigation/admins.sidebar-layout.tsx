@@ -30,6 +30,7 @@ import {
   Assignment as LogsIcon,
   AccountCircle,
   ReceiptLong,
+  FactCheck,
 } from '@mui/icons-material';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -138,6 +139,11 @@ export default function AdminSidebarLayout() {
       name: 'Transactions',
       icon: <ReceiptLong />,
       link: '/admin/transactions',
+    },
+    {
+      name: 'Refund Requests',
+      icon: <FactCheck />,
+      link: '/admin/request-refund',
     },
   ];
 

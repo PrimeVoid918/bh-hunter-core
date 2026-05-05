@@ -5,6 +5,8 @@ import {
   Admin,
   AdminSuspendUserPayload,
   AdminSuspendUserResponse,
+  RefundRequest,
+  RefundRequestResponse,
 } from './admin.types';
 import { ownerEndpoints, tenantEndpoints } from './configs';
 
@@ -15,6 +17,7 @@ import {
   AdminTransactionMetaData,
   AdminTransactionStats,
 } from './admin.types';
+import { refundRequestsSchema } from './admin.schemas';
 
 const adminApiRoute = `/admins`;
 export const adminApi = createApi({
@@ -25,6 +28,7 @@ export const adminApi = createApi({
     'Owner',
     'AdminTransaction',
     'AdminTransactionStats',
+    'RefundRequest',
   ],
   reducerPath: 'adminsApi',
   baseQuery: fetchBaseQuery({
@@ -95,6 +99,46 @@ export const adminApi = createApi({
         ),
       providesTags: [{ type: 'AdminTransactionStats', id: 'SUMMARY' }],
     }),
+
+    getRefundRequests: builder.query<
+      RefundRequestResponse,
+      { status?: string; page?: number; limit?: number }
+    >({
+      query: (params) => ({
+        url: `${adminApiRoute}/refund-requests`,
+        params,
+      }),
+
+      transformResponse: (
+        response: ApiResponseType<RefundRequestResponse>,
+      ): RefundRequestResponse => {
+        return response.results;
+      },
+    }),
+    approveRefundRequest: builder.mutation<
+      any,
+      { id: number; adminId: number; notes?: string }
+    >({
+      query: ({ id, adminId, notes }) => ({
+        url: `${adminApiRoute}/refund-requests/${id}/approve`,
+        method: 'PATCH',
+        body: { adminId, notes },
+      }),
+      invalidatesTags: [{ type: 'AdminTransaction', id: 'REFUND_LIST' }],
+    }),
+
+    rejectRefundRequest: builder.mutation<
+      any,
+      { id: number; adminId: number; notes?: string }
+    >({
+      query: ({ id, adminId, notes }) => ({
+        url: `${adminApiRoute}/refund-requests/${id}/reject`,
+        method: 'PATCH',
+        body: { adminId, notes },
+      }),
+      invalidatesTags: [{ type: 'AdminTransaction', id: 'REFUND_LIST' }],
+    }),
+
     create: builder.mutation<Admin, Partial<Admin>>({
       query: (data) => ({
         url: adminApiRoute,
@@ -207,6 +251,9 @@ export const {
   useGetTransactionQuery,
   useGetTransactionStatsQuery,
   useGetTransactionsQuery,
+  useGetRefundRequestsQuery,
+  useApproveRefundRequestMutation,
+  useRejectRefundRequestMutation,
   useCreateMutation,
   usePatchMutation,
   useDeleteMutation,

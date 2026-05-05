@@ -324,6 +324,52 @@ export class PaymentsService {
     };
   }
 
+  async createRefundRequest({
+    paymentId,
+    tenantId,
+    reason,
+  }: {
+    paymentId: number;
+    tenantId: number;
+    reason?: string;
+  }) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+
+    if (!payment) {
+      throw new NotFoundException('Payment not found');
+    }
+
+    if (payment.userId !== tenantId) {
+      throw new ForbiddenException();
+    }
+
+    if (payment.status !== PaymentStatus.PAID) {
+      throw new BadRequestException('Only paid payments can be refunded');
+    }
+
+    const existing = await this.prisma.refundRequest.findFirst({
+      where: {
+        paymentId,
+        status: 'PENDING',
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException('Refund request already exists');
+    }
+
+    return this.prisma.refundRequest.create({
+      data: {
+        paymentId,
+        requestedById: tenantId,
+        requestedByType: ResourceType.TENANT,
+        reason,
+      },
+    });
+  }
+
   /** Handle webhook from PayMongo to confirm payment */
   async confirmPayment(input: ConfirmPaymentInput) {
     const payment = await this.prisma.payment.findFirst({

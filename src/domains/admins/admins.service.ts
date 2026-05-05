@@ -605,4 +605,41 @@ export class AdminsService {
       user: updated,
     };
   }
+
+  async approveRefundRequest(
+    requestId: number,
+    adminId: number,
+    notes?: string,
+  ) {
+    if (!requestId) throw new BadRequestException('no request id provided');
+    if (!adminId) throw new BadRequestException('no request id provided');
+
+    return await this.prisma.refundRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'APPROVED',
+        adminId,
+        reviewedAt: new Date(),
+        adminNotes: notes,
+      },
+    });
+  }
+
+  async rejectRefundRequest(
+    requestId: number,
+    adminId: number,
+    notes?: string,
+  ) {
+    if (!requestId) throw new BadRequestException('no request id provided');
+    if (!adminId) throw new BadRequestException('no request id provided');
+    return await this.prisma.refundRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'REJECTED',
+        adminId,
+        reviewedAt: new Date(),
+        adminNotes: notes,
+      },
+    });
+  }
 }

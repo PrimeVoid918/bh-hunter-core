@@ -6,6 +6,7 @@ export type AdminRoutes = {
   '/admin/dashboard/tenants': undefined;
   '/admin/dashboard/quality': undefined;
   '/admin/transactions': undefined;
+  '/admin/request-refund': undefined;
   '/admin/validation/owners/permit': { ownerId: string };
   '/admin/validation/users/permit': { tenantId: string };
   '/admin/users/owners/permit': { ownerId: string };

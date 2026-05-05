@@ -297,6 +297,7 @@ model Admin {
   isDeleted             Boolean                @default(false)
   deletedAt             DateTime?
   verificationDocuments VerificationDocument[]
+  refundRequests        RefundRequest[]
 }
 
 model BoardingHouse {
@@ -452,9 +453,10 @@ model Payment {
 
   metadata Json?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  payouts   Payout[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  payouts        Payout[]
+  refundRequests RefundRequest[]
 }
 
 model Payout {
@@ -728,4 +730,33 @@ model BookingExtensionRequest {
   updatedAt DateTime @updatedAt
 
   @@index([bookingId, status])
+}
+
+enum RefundRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+model RefundRequest {
+  id        Int     @id @default(autoincrement())
+  paymentId Int
+  payment   Payment @relation(fields: [paymentId], references: [id])
+
+  status RefundRequestStatus @default(PENDING)
+
+  requestedById   Int
+  requestedByType ResourceType
+
+  reason String?
+
+  adminId Int?
+  admin   Admin? @relation(fields: [adminId], references: [id])
+
+  reviewedAt DateTime?
+  adminNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

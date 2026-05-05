@@ -72,4 +72,59 @@ export class AdminTransactionsService {
       refunded,
     };
   }
+
+  async findRefundRequests(query?: {
+    status?: 'PENDING' | 'APPROVED' | 'REJECTED' | 'COMPLETED';
+    page?: number;
+    limit?: number;
+  }) {
+    const page = query?.page ?? 1;
+    const limit = query?.limit ?? 10;
+    const skip = (page - 1) * limit;
+
+    const where: any = {};
+
+    if (query?.status) {
+      where.status = query.status;
+    }
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.refundRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          payment: {
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+              status: true,
+              purchaseType: true,
+              userId: true,
+            },
+          },
+          admin: {
+            select: {
+              id: true,
+              firstname: true,
+              lastname: true,
+            },
+          },
+        },
+      }),
+      this.prisma.refundRequest.count({ where }),
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
 }
